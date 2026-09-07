@@ -78,6 +78,22 @@ def actualizar_usuario(db: Session, usuario: Usuario, datos) -> Usuario:
     return usuario
 
 
+def eliminar_usuario(db: Session, usuario: Usuario) -> None:
+    """Elimina el usuario; desvincula residentes y sesiones de chat asociados."""
+    from app.models import (
+        Residente, SesionChat, MovimientoFinanciero, TareaMantenimiento, Documento, Evento,
+    )
+    uid = usuario.id
+    db.query(Residente).filter(Residente.usuario_id == uid).update({"usuario_id": None})
+    db.query(SesionChat).filter(SesionChat.usuario_id == uid).update({"usuario_id": None})
+    db.query(MovimientoFinanciero).filter(MovimientoFinanciero.creado_por == uid).update({"creado_por": None})
+    db.query(TareaMantenimiento).filter(TareaMantenimiento.asignado_a == uid).update({"asignado_a": None})
+    db.query(Documento).filter(Documento.subido_por == uid).update({"subido_por": None})
+    db.query(Evento).filter(Evento.creado_por == uid).update({"creado_por": None})
+    db.delete(usuario)
+    db.commit()
+
+
 def serializar_usuario(u: Usuario, db: Session) -> dict:
     rol = obtener_rol(db, u.rol_id)
     return {

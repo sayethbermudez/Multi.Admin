@@ -20,7 +20,7 @@ function prioridadColor(p: string) {
 }
 
 export default function Mantenimiento() {
-  const { puede } = usePermisos();
+  const { puede, puedeAlguno } = usePermisos();
   const { data: tareas, cargar, cargando } = useFetch<TareaMantenimiento[]>("/mantenimiento");
   const [abierto, setAbierto] = useState(false);
   const [editando, setEditando] = useState<TareaMantenimiento | null>(null);
@@ -101,11 +101,11 @@ export default function Mantenimiento() {
           <p className="text-sm text-gray-500">{tareas?.length ?? 0} órdenes</p>
         </div>
         <div className="flex items-center gap-2">
-          <ExportMenu
+          {puedeAlguno("reportes.ver", "mantenimiento.ver") && (<ExportMenu
             opciones={[
               { label: "Mantenimiento (Excel)", ruta: "/reportes/exportar/mantenimiento.xlsx", tipo: "xlsx" },
             ]}
-          />
+          />)}
           {puede("mantenimiento.crear") && (<Button variante="primary" tamano="sm" onClick={() => setAbierto(true)}>
             <Plus className="w-4 h-4" /> Nueva tarea
           </Button>)}
@@ -135,7 +135,7 @@ export default function Mantenimiento() {
                   <td className="py-2.5 text-gray-500">{fecha(t.fecha_programada)}</td>
                   <td className="py-2.5">
                     <div className="flex gap-1 items-center">
-                      {t.estado !== "completada" && (
+                      {t.estado !== "completada" && puede("mantenimiento.editar") && (
                         <Button variante="outline" tamano="sm" onClick={() => marcarCompletada(t)}>
                           Completar
                         </Button>

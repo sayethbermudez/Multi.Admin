@@ -8,13 +8,19 @@ from app.models import (
     ConceptoFinanciero, TareaMantenimiento, Documento,
 )
 from app.database import get_db
-from app.deps import require_permiso
+from app.deps import require_permiso, require_alguno, usuario_tiene_permiso
+from app.models import Evento
 from app.redis_client import cache_get, cache_set, cache_del
 
-router = APIRouter(prefix="/reportes", tags=["Reportes"], dependencies=[Depends(require_permiso("reportes.ver"))])
+# Los reportes generales exigen `reportes.ver`; las exportaciones de un módulo
+# concreto se autorizan además con el permiso `<modulo>.ver` correspondiente.
+router = APIRouter(prefix="/reportes", tags=["Reportes"])
+_REPORTES = [Depends(require_permiso("reportes.ver"))]
+_FINANZAS = [Depends(require_alguno("reportes.ver", "finanzas.ver"))]
+_MANTENIMIENTO = [Depends(require_alguno("reportes.ver", "mantenimiento.ver"))]
 
 
-@router.get("/dashboard", response_model=schemas.DashboardStats)
+@router.get("/dashboard", response_model=schemas.DashboardStats, dependencies=_REPORTES)
 def dashboard(db: Session = Depends(get_db)):
     """Estadísticas agregadas del dashboard (cacheadas en Redis 60s)."""
     cacheado = cache_get("dashboard_stats")
@@ -60,7 +66,32 @@ def dashboard(db: Session = Depends(get_db)):
     return resultado
 
 
-@router.get("/finanzas-por-mes")
+@router.get("/resumen-basico")
+def resumen_basico(
+    usuario=Depends(require_permiso("dashboard.ver")),
+    db: Session = Depends(get_db),
+):
+    """Contadores NO financieros para el panel de roles sin `reportes.ver`.
+    Solo incluye los módulos que el rol puede ver (RBAC)."""
+    from datetime import date
+    ve = lambda m: usuario_tiene_permiso(db, usuario, f"{m}.ver")  # noqa: E731
+    out: dict = {}
+    if ve("propiedades"):
+        out["propiedades"] = db.query(Propiedad).count()
+    if ve("residentes"):
+        out["residentes"] = db.query(Residente).filter(Residente.activo == True).count()
+    if ve("mantenimiento"):
+        out["mantenimientos_pendientes"] = db.query(TareaMantenimiento).filter(
+            TareaMantenimiento.estado.in_(["pendiente", "en_proceso"])
+        ).count()
+    if ve("documentos"):
+        out["documentos"] = db.query(Documento).count()
+    if ve("eventos"):
+        out["eventos_proximos"] = db.query(Evento).filter(Evento.fecha >= date.today()).count()
+    return out
+
+
+@router.get("/finanzas-por-mes", dependencies=_REPORTES)
 def finanzas_por_mes(db: Session = Depends(get_db)):
     """Ingresos y gastos agrupados por mes (para las gráficas)."""
     cacheado = cache_get("finanzas_por_mes")
@@ -96,7 +127,7 @@ def finanzas_por_mes(db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 # EXPORTACIÓN DE REPORTES (Excel / PDF)
 # ---------------------------------------------------------------------------
-@router.get("/exportar/finanzas.xlsx")
+@router.get("/exportar/finanzas.xlsx", dependencies=_FINANZAS)
 def exportar_finanzas(db: Session = Depends(get_db)):
     contenido = exportar.finanzas_xlsx(db)
     return Response(
@@ -106,7 +137,7 @@ def exportar_finanzas(db: Session = Depends(get_db)):
     )
 
 
-@router.get("/exportar/pagos.xlsx")
+@router.get("/exportar/pagos.xlsx", dependencies=_FINANZAS)
 def exportar_pagos(db: Session = Depends(get_db)):
     contenido = exportar.pagos_xlsx(db)
     return Response(
@@ -116,7 +147,7 @@ def exportar_pagos(db: Session = Depends(get_db)):
     )
 
 
-@router.get("/exportar/mantenimiento.xlsx")
+@router.get("/exportar/mantenimiento.xlsx", dependencies=_MANTENIMIENTO)
 def exportar_mantenimiento(db: Session = Depends(get_db)):
     contenido = exportar.mantenimiento_xlsx(db)
     return Response(
@@ -126,7 +157,7 @@ def exportar_mantenimiento(db: Session = Depends(get_db)):
     )
 
 
-@router.get("/exportar/finanzas.pdf")
+@router.get("/exportar/finanzas.pdf", dependencies=_FINANZAS)
 def exportar_finanzas_pdf(db: Session = Depends(get_db)):
     contenido = exportar.reporte_finanzas_pdf(db)
     return Response(
@@ -136,7 +167,7 @@ def exportar_finanzas_pdf(db: Session = Depends(get_db)):
     )
 
 
-@router.get("/exportar/pagos.pdf")
+@router.get("/exportar/pagos.pdf", dependencies=_FINANZAS)
 def exportar_pagos_pdf(db: Session = Depends(get_db)):
     contenido = exportar.pagos_pdf(db)
     return Response(

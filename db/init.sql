@@ -280,52 +280,49 @@ INSERT INTO permisos (codigo, modulo, accion, descripcion) VALUES
     ('eventos.eliminar',   'eventos',   'eliminar', 'Eliminar eventos'),
     ('config.ver',         'config',    'ver',      'Ver configuración del sistema'),
     ('config.editar',      'config',    'editar',   'Editar configuración'),
-    ('chat.usar',          'chat',      'usar',     'Usar el chatbot / asistente')
+    ('chat.usar',          'chat',      'usar',     'Usar el chatbot / asistente'),
+    ('sistema.respaldar',  'sistema',   'respaldar','Generar respaldo de la base de datos')
 ON CONFLICT (codigo) DO NOTHING;
 
 -- Asignación de permisos por rol (congruente con cada perfil de usuario).
+-- NOTA: la fuente de verdad es backend/app/permisos.py (MATRIZ); el backend la
+-- sincroniza al arrancar. Este bloque la replica para un despliegue limpio.
 DO $$
 DECLARE
-    rol INT;
     cod TEXT;
 BEGIN
     -- super_admin: TODOS los permisos.
-    FOR cod IN SELECT codigo FROM permisos LOOP
-        INSERT INTO rol_permisos (rol_id, permiso_id)
-        SELECT 1, id FROM permisos WHERE codigo = cod
-        ON CONFLICT DO NOTHING;
-    END LOOP;
+    INSERT INTO rol_permisos (rol_id, permiso_id)
+    SELECT 1, id FROM permisos ON CONFLICT DO NOTHING;
 
-    -- admin: gestión completa del conjunto (todos menos algunas de super admin).
-    FOR cod IN SELECT codigo FROM permisos LOOP
-        INSERT INTO rol_permisos (rol_id, permiso_id)
-        SELECT 2, id FROM permisos WHERE codigo = cod
-        ON CONFLICT DO NOTHING;
-    END LOOP;
+    -- admin: gestión completa del conjunto, salvo eliminar usuarios y respaldar BD.
+    INSERT INTO rol_permisos (rol_id, permiso_id)
+    SELECT 2, id FROM permisos WHERE codigo NOT IN ('usuarios.eliminar','sistema.respaldar')
+    ON CONFLICT DO NOTHING;
 
-    -- tesoreria: finanzas, reportes, documentos y chatbot.
-    FOR cod IN SELECT codigo FROM permisos
-              WHERE modulo IN ('finanzas','reportes','dashboard') OR codigo IN ('documentos.ver','documentos.descargar','chat.usar') LOOP
-        INSERT INTO rol_permisos (rol_id, permiso_id)
-        SELECT 4, id FROM permisos WHERE codigo = cod
-        ON CONFLICT DO NOTHING;
-    END LOOP;
+    -- tesoreria: finanzas completas, reportes, lectura de propiedades/residentes/documentos y chatbot.
+    INSERT INTO rol_permisos (rol_id, permiso_id)
+    SELECT 4, id FROM permisos WHERE codigo IN (
+        'dashboard.ver','reportes.ver',
+        'finanzas.ver','finanzas.crear','finanzas.editar','finanzas.eliminar',
+        'propiedades.ver','residentes.ver',
+        'documentos.ver','documentos.descargar','chat.usar')
+    ON CONFLICT DO NOTHING;
 
-    -- residente: lectura de su conjunto + chatbot + crear solicitudes.
-    FOR cod IN SELECT codigo FROM permisos
-              WHERE codigo IN ('dashboard.ver','propiedades.ver','documentos.ver','documentos.descargar','eventos.ver','chat.usar','mantenimiento.ver','mantenimiento.crear') LOOP
-        INSERT INTO rol_permisos (rol_id, permiso_id)
-        SELECT 3, id FROM permisos WHERE codigo = cod
-        ON CONFLICT DO NOTHING;
-    END LOOP;
+    -- residente: lectura de su conjunto + crear solicitudes de mantenimiento + chatbot.
+    INSERT INTO rol_permisos (rol_id, permiso_id)
+    SELECT 3, id FROM permisos WHERE codigo IN (
+        'dashboard.ver','propiedades.ver','documentos.ver','documentos.descargar',
+        'eventos.ver','mantenimiento.ver','mantenimiento.crear','chat.usar')
+    ON CONFLICT DO NOTHING;
 
-    -- seguridad: lectura (propiedades, residentes, mantenimiento, eventos) + chatbot.
-    FOR cod IN SELECT codigo FROM permisos
-              WHERE codigo IN ('propiedades.ver','residentes.ver','mantenimiento.ver','eventos.ver','chat.usar','dashboard.ver') LOOP
-        INSERT INTO rol_permisos (rol_id, permiso_id)
-        SELECT 5, id FROM permisos WHERE codigo = cod
-        ON CONFLICT DO NOTHING;
-    END LOOP;
+    -- seguridad: lectura operativa + reportar/actualizar mantenimientos + chatbot.
+    INSERT INTO rol_permisos (rol_id, permiso_id)
+    SELECT 5, id FROM permisos WHERE codigo IN (
+        'dashboard.ver','propiedades.ver','residentes.ver',
+        'mantenimiento.ver','mantenimiento.crear','mantenimiento.editar',
+        'eventos.ver','documentos.ver','documentos.descargar','chat.usar')
+    ON CONFLICT DO NOTHING;
 
     RAISE NOTICE 'Permisos por rol asignados correctamente (RBAC).';
 END $$;

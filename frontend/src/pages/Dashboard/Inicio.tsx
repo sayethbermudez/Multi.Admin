@@ -34,6 +34,11 @@ export default function Inicio() {
   const { data: movs } = useFetch<Movimiento[]>(
     puedeVerFinanzas ? "/finanzas" : null,
   );
+  // Contadores no financieros para roles sin reportes (filtrados por permisos en el backend).
+  const { data: basico } = useFetch<Partial<DashboardStats> & { eventos_proximos?: number }>(
+    !puedeVerReportes ? "/reportes/resumen-basico" : null,
+  );
+  const ve = (m: string) => tienePermiso(usuario, `${m}.ver`);
 
   const ultimos = movs?.slice(0, 6) ?? [];
   const maxSerie = Math.max(...(serie?.map((s) => s.valor) ?? [1]));
@@ -56,44 +61,40 @@ export default function Inicio() {
           </p>
         </div>
 
-        {/* Indicadores que sí puede ver: documentos, eventos y mantenimiento */}
+        {/* Indicadores: solo de los módulos que el rol puede ver */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            titulo="Propiedades"
-            valor={`${stats?.propiedades ?? 0}`}
-            icono={Building2}
-            color="success"
-            indicador="Unidades"
-          />
-          <StatCard
-            titulo="Mantenimientos"
-            valor={`${stats?.mantenimientos_pendientes ?? 0}`}
-            icono={Wrench}
-            color="danger"
-            indicador="Pendientes"
-            subida={false}
-          />
-          <StatCard
-            titulo="Documentos"
-            valor={`${stats?.documentos ?? 0}`}
-            icono={FileText}
-            color="primary"
-            indicador="Publicados"
-          />
+          {ve("propiedades") && (
+            <StatCard titulo="Propiedades" valor={`${basico?.propiedades ?? 0}`} icono={Building2} color="success" indicador="Unidades" />
+          )}
+          {ve("residentes") && (
+            <StatCard titulo="Residentes" valor={`${basico?.residentes ?? 0}`} icono={Users} color="primary" indicador="Activos" />
+          )}
+          {ve("mantenimiento") && (
+            <StatCard titulo="Mantenimientos" valor={`${basico?.mantenimientos_pendientes ?? 0}`} icono={Wrench} color="danger" indicador="Pendientes" subida={false} />
+          )}
+          {ve("documentos") && (
+            <StatCard titulo="Documentos" valor={`${basico?.documentos ?? 0}`} icono={FileText} color="primary" indicador="Publicados" />
+          )}
+          {ve("eventos") && (
+            <StatCard titulo="Eventos" valor={`${basico?.eventos_proximos ?? 0}`} icono={CalendarDays} color="warning" indicador="Próximos" />
+          )}
         </div>
 
         <div className="card p-5">
           <h3 className="text-lg font-semibold mb-3">Dónde encontrar cada cosa</h3>
           <ul className="text-sm text-gray-500 space-y-2">
-            <li className="flex items-center gap-2">
+            {ve("eventos") && (<li className="flex items-center gap-2">
               <CalendarDays className="w-4 h-4 text-primary-500" /> Eventos y novedades del conjunto en "Eventos".
-            </li>
-            <li className="flex items-center gap-2">
-              <Wrench className="w-4 h-4 text-primary-500" /> Reporta fallas y solicitudes en "Mantenimiento".
-            </li>
-            <li className="flex items-center gap-2">
+            </li>)}
+            {ve("mantenimiento") && (<li className="flex items-center gap-2">
+              <Wrench className="w-4 h-4 text-primary-500" /> {tienePermiso(usuario, "mantenimiento.crear") ? "Reporta fallas y solicitudes" : "Consulta las órdenes"} en "Mantenimiento".
+            </li>)}
+            {ve("documentos") && (<li className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-primary-500" /> Descarga documentos (actas, contratos) en "Documentos".
-            </li>
+            </li>)}
+            {ve("residentes") && (<li className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-primary-500" /> Consulta el directorio en "Residentes".
+            </li>)}
           </ul>
         </div>
       </div>

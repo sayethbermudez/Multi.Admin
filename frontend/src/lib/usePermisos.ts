@@ -1,5 +1,5 @@
 import { useAuth } from "@/context/AuthContext";
-import { tienePermiso, rolEsAdmin } from "@/lib/permisos";
+import { tienePermiso, tieneAlguno, rolEsAdmin, esSuperAdmin } from "@/lib/permisos";
 
 /**
  * Hook de RBAC para componentes: expone helpers para saber si el usuario
@@ -15,7 +15,11 @@ export function usePermisos() {
     usuario,
     /** ¿Tiene el permiso `<codigo>`? (ej. "usuarios.eliminar") */
     puede: (codigo: string) => tienePermiso(usuario, codigo),
-    /** ¿El rol es de administración (acceso total)? */
+    /** ¿Tiene alguno de los permisos? */
+    puedeAlguno: (...codigos: string[]) => tieneAlguno(usuario, ...codigos),
+    /** ¿El rol es de administración (super_admin/admin)? Solo informativo. */
     esAdmin: () => rolEsAdmin(usuario),
+    /** ¿Es super administrador? */
+    esSuper: () => esSuperAdmin(usuario),
   };
 }

@@ -108,3 +108,42 @@ npx vite build          # build producción
 - Docker no pudo ejecutarse en este sandbox (validar `docker compose up --build -d` en una máquina con Docker).
 - Se probó sin SMTP real (la recuperación guarda el token y no revela si el correo existe). Con credenciales SMTP en `.env` se envía el correo de verdad.
 - Opcional: añadir CI (GitHub Actions) que corra estos tests automáticamente.
+
+---
+
+## 11. Auditoría y corrección de permisos por rol (RBAC) — 2026-09-07
+
+### Problemas encontrados (probado en vivo con un usuario por rol)
+
+| # | Problema | Gravedad |
+|---|----------|----------|
+| 1 | `POST /register` era público y aceptaba `rol_id` → **cualquiera podía registrarse como super_admin** | Crítica |
+| 2 | El frontend daba acceso total por `rol_id` 1/2 ignorando la lista real de permisos (bypass de RBAC) | Alta |
+| 3 | No existía `DELETE /usuarios/{id}` (la UI mostraba el botón → 405) | Alta |
+| 4 | `admin` y `super_admin` tenían exactamente los mismos permisos | Media |
+| 5 | Cualquier rol con `chat.usar` podía leer las conversaciones de otros usuarios y obtener saldos/residentes por el chatbot | Alta |
+| 6 | Notificaciones mostraban pagos en mora a residentes/seguridad (sin `finanzas.ver`) | Media |
+| 7 | Botones "Completar", toggle Activo/Inactivo, "Exportar" y "Respaldar BD" visibles sin permiso | Media |
+| 8 | Dashboard de roles sin reportes mostraba siempre 0 (endpoint devolvía 403) | Baja |
+| 9 | Un admin podía cambiarse su propio rol, desactivarse o editar al super_admin | Media |
+| 10 | Exportar mantenimiento exigía `reportes.ver`, así que residentes/seguridad no podían | Baja |
+
+### Correcciones
+- `backend/app/permisos.py`: **matriz única** rol→permisos, sincronizada al arrancar (`sincronizar_permisos`). `db/init.sql` alineado.
+- Nuevo permiso `sistema.respaldar`; `usuarios.eliminar` y `sistema.respaldar` exclusivos de super_admin.
+- `/register`: público solo como residente; otros roles requieren `usuarios.crear`; super_admin solo por super_admin.
+- `DELETE /usuarios/{id}` implementado con reglas (no a uno mismo, no a super_admin si no eres super_admin).
+- `PUT /usuarios/{id}`: no cambiar el propio rol ni auto-desactivarse; admin no toca super_admin.
+- Chatbot: sesiones aisladas por usuario; respuestas filtradas por permiso de módulo.
+- Notificaciones y nuevo `GET /reportes/resumen-basico` filtrados por permisos del rol.
+- Frontend: `tienePermiso` usa **solo** `usuario.permisos`; página "Acceso restringido"; selectores de rol según quién edita; botones condicionados a permisos.
+
+### Pruebas
+```
+backend/tests/test_rbac.py   → 78 passed  (login como los 5 roles, 60+ combinaciones rol×endpoint,
+                                escalada por /register, reglas de usuarios, chat, notificaciones)
+backend/tests/test_api.py    → 20 passed
+backend/tests/test_unit.py   →  8 passed
+frontend/tests_ui_rbac.py    → 36/36 OK  (Playwright: login real por rol, menú, rutas bloqueadas,
+                                botones visibles/ocultos, dashboard). Capturas en capturas_rbac/
+```

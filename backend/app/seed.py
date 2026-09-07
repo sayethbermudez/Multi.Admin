@@ -34,7 +34,7 @@ def ejecutar_seed(db: Session) -> None:
         roles[nombre] = rol
 
     # ---- Usuario administrador por defecto --------------------------------
-    admin_rol = roles["admin"]
+    admin_rol = roles["super_admin"]  # la cuenta sembrada es el super administrador del sistema
     super_admin = Usuario(
         nombre="Super Administrador",
         telefono="3001234567",

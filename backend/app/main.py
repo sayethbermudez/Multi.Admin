@@ -14,6 +14,7 @@ from app.routers import (
     notificacion, admin,
 )
 from app.seed import ejecutar_seed
+from app.permisos import sincronizar_permisos
 
 logging.basicConfig(level=logging.INFO)
 
@@ -56,6 +57,7 @@ def arrancar():
     """Siembra datos iniciales si la base está vacía (idempotente)."""
     db: Session = SessionLocal()
     try:
+        sincronizar_permisos(db)
         ejecutar_seed(db)
     finally:
         db.close()

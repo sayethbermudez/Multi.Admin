@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from app.database import get_db
 from app.deps import require_permiso
 
-router = APIRouter(prefix="/admin", tags=["Admin"], dependencies=[Depends(require_permiso("usuarios.ver"))])
+router = APIRouter(prefix="/admin", tags=["Admin"], dependencies=[Depends(require_permiso("sistema.respaldar"))])
 
 
 @router.get("/backup")

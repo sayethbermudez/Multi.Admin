@@ -13,7 +13,7 @@ import { moneda, fecha } from "@/lib/format";
 import type { Movimiento, Concepto } from "@/types";
 
 export default function Finanzas() {
-  const { puede } = usePermisos();
+  const { puede, puedeAlguno } = usePermisos();
   const [estado, setEstado] = useState("");
   const { data: movs, cargar, cargando } = useFetch<Movimiento[]>(
     `/finanzas${estado ? `?estado=${estado}` : ""}`,
@@ -119,14 +119,14 @@ export default function Finanzas() {
               <option value="pagado">Pagado</option>
               <option value="vencido">Vencido</option>
             </select>
-            <ExportMenu
+            {puedeAlguno("reportes.ver", "finanzas.ver") && (<ExportMenu
               opciones={[
                 { label: "Finanzas (Excel)", ruta: "/reportes/exportar/finanzas.xlsx", tipo: "xlsx" },
                 { label: "Pagos en mora (Excel)", ruta: "/reportes/exportar/pagos.xlsx", tipo: "xlsx" },
                 { label: "Resumen financiero (PDF)", ruta: "/reportes/exportar/finanzas.pdf", tipo: "pdf" },
                 { label: "Pagos en mora (PDF)", ruta: "/reportes/exportar/pagos.pdf", tipo: "pdf" },
               ]}
-            />
+            />)}
             {puede("finanzas.crear") && (<Button variante="primary" tamano="sm" onClick={() => setAbierto(true)}>
               <Plus className="w-4 h-4" /> Nuevo
             </Button>)}

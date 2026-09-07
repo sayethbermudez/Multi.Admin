@@ -1,0 +1,320 @@
+"""
+Pruebas de RBAC: inicia sesión como CADA rol (super_admin, admin, residente,
+tesorería, seguridad) y verifica que la API concede/niega cada acción según la
+matriz de permisos (backend/app/permisos.py).
+
+Se ejecuta contra la API real (PostgreSQL + Redis):
+    cd backend && python -m pytest tests/test_rbac.py -v
+"""
+import os
+import time
+
+import httpx
+import pytest
+
+BASE = os.getenv("TEST_API_URL", "http://localhost:8041")
+c = httpx.Client(base_url=BASE, timeout=30)
+
+ADMIN_EMAIL, ADMIN_PASS = "admin@multiadmin.com", "Admin2026!"
+PASS = "Prueba2026!"
+ROLES = {"super_admin": 1, "admin": 2, "residente": 3, "tesoreria": 4, "seguridad": 5}
+
+# Matriz esperada (espejo de app/permisos.py). Si cambia la matriz, cambia aquí.
+ESPERADO = {
+    "super_admin": None,  # todos
+    "admin": None,        # todos menos SOLO_SUPER
+    "tesoreria": {
+        "dashboard.ver", "reportes.ver", "finanzas.ver", "finanzas.crear", "finanzas.editar",
+        "finanzas.eliminar", "propiedades.ver", "residentes.ver", "documentos.ver",
+        "documentos.descargar", "chat.usar",
+    },
+    "residente": {
+        "dashboard.ver", "propiedades.ver", "documentos.ver", "documentos.descargar",
+        "eventos.ver", "mantenimiento.ver", "mantenimiento.crear", "chat.usar",
+    },
+    "seguridad": {
+        "dashboard.ver", "propiedades.ver", "residentes.ver", "mantenimiento.ver",
+        "mantenimiento.crear", "mantenimiento.editar", "eventos.ver", "documentos.ver",
+        "documentos.descargar", "chat.usar",
+    },
+}
+SOLO_SUPER = {"usuarios.eliminar", "sistema.respaldar"}
+
+
+# ---------------------------------------------------------------------------
+# Fixtures: un usuario real por rol (creados por el super_admin)
+# ---------------------------------------------------------------------------
+@pytest.fixture(scope="module")
+def sesiones():
+    """Devuelve {rol: (headers, usuario_json)} para los 5 roles."""
+    seed = c.post("/login", json={"correo": ADMIN_EMAIL, "password": ADMIN_PASS}).json()
+    assert seed["ok"], "el admin sembrado debe poder iniciar sesión"
+    seed_h = {"Authorization": f"Bearer {seed['access_token']}"}
+
+    # Aseguramos un super_admin real (el seed crea un 'admin'); lo promovemos vía BD-API:
+    # si el usuario sembrado ya es super_admin no pasa nada.
+    correo_super = "rbac.super_admin@test.com"
+    r = c.post("/register", headers=seed_h, json={
+        "nombre": "RBAC super", "correo": correo_super, "contrasena": PASS, "rol_id": 1,
+    })
+    if r.status_code == 403:
+        # El seed es admin (rol 2) y no puede crear super_admin. Lo elevamos por SQL directo
+        # solo para el test (no hay endpoint que lo permita, y así debe ser).
+        _promover_por_sql(ADMIN_EMAIL)
+        seed = c.post("/login", json={"correo": ADMIN_EMAIL, "password": ADMIN_PASS}).json()
+        seed_h = {"Authorization": f"Bearer {seed['access_token']}"}
+        c.post("/register", headers=seed_h, json={
+            "nombre": "RBAC super", "correo": correo_super, "contrasena": PASS, "rol_id": 1,
+        })
+
+    out = {}
+    for rol, rid in ROLES.items():
+        correo = f"rbac.{rol}@test.com"
+        c.post("/register", headers=seed_h, json={
+            "nombre": f"RBAC {rol}", "correo": correo, "contrasena": PASS, "rol_id": rid,
+        })
+        lg = c.post("/login", json={"correo": correo, "password": PASS}).json()
+        assert lg["ok"], f"login {rol}: {lg}"
+        out[rol] = ({"Authorization": f"Bearer {lg['access_token']}"}, lg["usuario"])
+    return out
+
+
+def _promover_por_sql(correo: str):
+    import psycopg2
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    with conn, conn.cursor() as cur:
+        cur.execute("UPDATE usuarios SET rol_id = 1 WHERE correo = %s", (correo,))
+    conn.close()
+
+
+def h(sesiones, rol):
+    return sesiones[rol][0]
+
+
+# ---------------------------------------------------------------------------
+# 1. La lista de permisos que entrega /login coincide con la matriz
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("rol", list(ROLES))
+def test_permisos_del_rol_coinciden_con_matriz(sesiones, rol):
+    permisos = set(sesiones[rol][1]["permisos"])
+    todos = set(c.get("/me", headers=h(sesiones, "super_admin")).json()["permisos"])
+    assert "sistema.respaldar" in todos and "usuarios.eliminar" in todos
+    if rol == "super_admin":
+        assert permisos == todos
+    elif rol == "admin":
+        assert permisos == todos - SOLO_SUPER
+    else:
+        assert permisos == ESPERADO[rol], f"{rol}: {permisos ^ ESPERADO[rol]}"
+
+
+# ---------------------------------------------------------------------------
+# 2. Matriz de acceso a endpoints por rol
+#    (rol, método, ruta, body, debe_permitir)
+# ---------------------------------------------------------------------------
+def _ok(status):        # permitido = cualquier cosa que no sea 401/403
+    return status not in (401, 403)
+
+
+CASOS = [
+    # --- residente -------------------------------------------------------
+    ("residente", "GET", "/usuarios", None, False),
+    ("residente", "GET", "/residentes", None, False),
+    ("residente", "GET", "/finanzas", None, False),
+    ("residente", "GET", "/finanzas/resumen", None, False),
+    ("residente", "GET", "/reportes/dashboard", None, False),
+    ("residente", "GET", "/reportes/exportar/finanzas.xlsx", None, False),
+    ("residente", "GET", "/reportes/exportar/mantenimiento.xlsx", None, True),
+    ("residente", "GET", "/reportes/resumen-basico", None, True),
+    ("residente", "GET", "/configuracion", None, False),
+    ("residente", "GET", "/admin/backup", None, False),
+    ("residente", "GET", "/propiedades", None, True),
+    ("residente", "POST", "/propiedades", {}, False),
+    ("residente", "GET", "/documentos", None, True),
+    ("residente", "POST", "/documentos", {}, False),
+    ("residente", "GET", "/eventos", None, True),
+    ("residente", "POST", "/eventos", {}, False),
+    ("residente", "GET", "/mantenimiento", None, True),
+    ("residente", "POST", "/mantenimiento", {"titulo": "Gotera", "descripcion": "Baño", "prioridad": "media"}, True),
+    ("residente", "PUT", "/mantenimiento/1", {"titulo": "x"}, False),
+    ("residente", "DELETE", "/mantenimiento/1", None, False),
+    ("residente", "GET", "/chat/sesiones", None, True),
+    ("residente", "GET", "/notificaciones", None, True),
+    # --- tesoreria -------------------------------------------------------
+    ("tesoreria", "GET", "/finanzas", None, True),
+    ("tesoreria", "POST", "/finanzas", {}, True),          # 422 por body vacío, pero autorizado
+    ("tesoreria", "DELETE", "/finanzas/999999", None, True),  # 404, autorizado
+    ("tesoreria", "GET", "/reportes/dashboard", None, True),
+    ("tesoreria", "GET", "/reportes/exportar/finanzas.xlsx", None, True),
+    ("tesoreria", "GET", "/reportes/exportar/pagos.pdf", None, True),
+    ("tesoreria", "GET", "/propiedades", None, True),
+    ("tesoreria", "GET", "/residentes", None, True),
+    ("tesoreria", "POST", "/residentes", {}, False),
+    ("tesoreria", "GET", "/usuarios", None, False),
+    ("tesoreria", "GET", "/mantenimiento", None, False),
+    ("tesoreria", "GET", "/eventos", None, False),
+    ("tesoreria", "GET", "/configuracion", None, False),
+    ("tesoreria", "GET", "/admin/backup", None, False),
+    # --- seguridad -------------------------------------------------------
+    ("seguridad", "GET", "/residentes", None, True),
+    ("seguridad", "POST", "/residentes", {}, False),
+    ("seguridad", "GET", "/propiedades", None, True),
+    ("seguridad", "GET", "/mantenimiento", None, True),
+    ("seguridad", "POST", "/mantenimiento", {"titulo": "Luz", "descripcion": "Portería", "prioridad": "alta"}, True),
+    ("seguridad", "DELETE", "/mantenimiento/999999", None, False),
+    ("seguridad", "GET", "/eventos", None, True),
+    ("seguridad", "GET", "/documentos", None, True),
+    ("seguridad", "POST", "/documentos", {}, False),
+    ("seguridad", "GET", "/finanzas", None, False),
+    ("seguridad", "GET", "/reportes/dashboard", None, False),
+    ("seguridad", "GET", "/usuarios", None, False),
+    ("seguridad", "GET", "/configuracion", None, False),
+    # --- admin -----------------------------------------------------------
+    ("admin", "GET", "/usuarios", None, True),
+    ("admin", "GET", "/finanzas", None, True),
+    ("admin", "GET", "/reportes/dashboard", None, True),
+    ("admin", "GET", "/configuracion", None, True),
+    ("admin", "PUT", "/configuracion", [], True),
+    ("admin", "GET", "/admin/backup", None, False),          # solo super_admin
+    ("admin", "DELETE", "/usuarios/999999", None, False),    # solo super_admin
+    # --- super_admin -----------------------------------------------------
+    ("super_admin", "GET", "/usuarios", None, True),
+    ("super_admin", "DELETE", "/usuarios/999999", None, True),   # 404, autorizado
+    ("super_admin", "GET", "/admin/backup", None, True),         # 200 o 500 sin pg_dump, pero autorizado
+    ("super_admin", "GET", "/configuracion", None, True),
+]
+
+
+@pytest.mark.parametrize("rol,metodo,ruta,body,permitido", CASOS,
+                         ids=[f"{r}-{m}-{p}" for r, m, p, _, _ in CASOS])
+def test_matriz_endpoints(sesiones, rol, metodo, ruta, body, permitido):
+    r = c.request(metodo, ruta, headers=h(sesiones, rol), json=body)
+    assert _ok(r.status_code) == permitido, f"{rol} {metodo} {ruta} -> {r.status_code}: {r.text[:120]}"
+
+
+def test_sin_token_401():
+    for ruta in ["/usuarios", "/finanzas", "/reportes/dashboard", "/chat/sesiones", "/notificaciones"]:
+        assert c.get(ruta).status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# 3. Escalada de privilegios por /register
+# ---------------------------------------------------------------------------
+def test_registro_publico_no_permite_elegir_rol_admin():
+    for rol_id in (1, 2, 4, 5):
+        r = c.post("/register", json={
+            "nombre": "Intruso", "correo": f"intruso{rol_id}.{int(time.time())}@x.com",
+            "contrasena": "12345678", "rol_id": rol_id,
+        })
+        assert r.status_code == 403, r.text
+
+
+def test_registro_publico_como_residente_si_funciona():
+    correo = f"vecino.{int(time.time())}@x.com"
+    r = c.post("/register", json={"nombre": "Vecino", "correo": correo, "contrasena": "12345678", "rol_id": 3})
+    assert r.status_code == 200, r.text
+    assert r.json()["rol_id"] == 3
+
+
+def test_residente_autenticado_no_puede_crear_admins(sesiones):
+    r = c.post("/register", headers=h(sesiones, "residente"), json={
+        "nombre": "Intruso", "correo": f"i.{int(time.time())}@x.com", "contrasena": "12345678", "rol_id": 2,
+    })
+    assert r.status_code == 403
+
+
+def test_admin_crea_tesoreria_pero_no_super_admin(sesiones):
+    ok = c.post("/register", headers=h(sesiones, "admin"), json={
+        "nombre": "Teso", "correo": f"teso.{int(time.time())}@x.com", "contrasena": "12345678", "rol_id": 4,
+    })
+    assert ok.status_code == 200, ok.text
+    no = c.post("/register", headers=h(sesiones, "admin"), json={
+        "nombre": "Super", "correo": f"sup.{int(time.time())}@x.com", "contrasena": "12345678", "rol_id": 1,
+    })
+    assert no.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# 4. Reglas de gestión de usuarios
+# ---------------------------------------------------------------------------
+def test_admin_no_puede_editar_ni_eliminar_super_admin(sesiones):
+    super_id = sesiones["super_admin"][1]["id"]
+    r = c.put(f"/usuarios/{super_id}", headers=h(sesiones, "admin"), json={"activo": False})
+    assert r.status_code == 403
+    r = c.delete(f"/usuarios/{super_id}", headers=h(sesiones, "admin"))
+    assert r.status_code == 403
+
+
+def test_admin_no_puede_ascender_a_nadie_a_super_admin(sesiones):
+    res_id = sesiones["residente"][1]["id"]
+    r = c.put(f"/usuarios/{res_id}", headers=h(sesiones, "admin"), json={"rol_id": 1})
+    assert r.status_code == 403
+
+
+def test_nadie_cambia_su_propio_rol_ni_se_desactiva(sesiones):
+    for rol in ("super_admin", "admin"):
+        yo = sesiones[rol][1]["id"]
+        assert c.put(f"/usuarios/{yo}", headers=h(sesiones, rol), json={"rol_id": 3}).status_code == 400
+        assert c.put(f"/usuarios/{yo}", headers=h(sesiones, rol), json={"activo": False}).status_code == 400
+    yo = sesiones["super_admin"][1]["id"]
+    assert c.delete(f"/usuarios/{yo}", headers=h(sesiones, "super_admin")).status_code == 400
+
+
+def test_super_admin_elimina_usuario_y_admin_no(sesiones):
+    correo = f"borrable.{int(time.time())}@x.com"
+    nuevo = c.post("/register", headers=h(sesiones, "super_admin"), json={
+        "nombre": "Borrable", "correo": correo, "contrasena": "12345678", "rol_id": 3,
+    }).json()
+    assert c.delete(f"/usuarios/{nuevo['id']}", headers=h(sesiones, "admin")).status_code == 403
+    assert c.delete(f"/usuarios/{nuevo['id']}", headers=h(sesiones, "super_admin")).status_code == 204
+    assert c.get(f"/usuarios/{nuevo['id']}", headers=h(sesiones, "super_admin")).status_code == 404
+
+
+def test_usuario_desactivado_pierde_acceso(sesiones):
+    correo = f"inactivo.{int(time.time())}@x.com"
+    nuevo = c.post("/register", headers=h(sesiones, "admin"), json={
+        "nombre": "Inactivo", "correo": correo, "contrasena": "12345678", "rol_id": 3,
+    }).json()
+    tok = c.post("/login", json={"correo": correo, "password": "12345678"}).json()["access_token"]
+    assert c.get("/propiedades", headers={"Authorization": f"Bearer {tok}"}).status_code == 200
+    c.put(f"/usuarios/{nuevo['id']}", headers=h(sesiones, "admin"), json={"activo": False})
+    assert c.get("/propiedades", headers={"Authorization": f"Bearer {tok}"}).status_code == 401
+    assert c.post("/login", json={"correo": correo, "password": "12345678"}).json()["ok"] is False
+
+
+# ---------------------------------------------------------------------------
+# 5. Chatbot: aislamiento de sesiones y filtrado por módulo
+# ---------------------------------------------------------------------------
+def test_chat_residente_no_ve_sesiones_de_otros(sesiones):
+    # tesorería crea una conversación
+    s = c.post("/chat/ask", headers=h(sesiones, "tesoreria"), json={"mensaje": "hola"}).json()
+    sid = s["sesion_id"]
+    # residente: no aparece en su lista, no puede leerla ni escribir en ella
+    lista = c.get("/chat/sesiones", headers=h(sesiones, "residente")).json()
+    assert all(x["id"] != sid for x in lista)
+    assert c.get(f"/chat/sesiones/{sid}/mensajes", headers=h(sesiones, "residente")).status_code == 403
+    assert c.post("/chat/ask", headers=h(sesiones, "residente"),
+                  json={"mensaje": "hola", "sesion_id": sid}).status_code == 403
+    # el admin (usuarios.ver) sí puede supervisarla
+    assert c.get(f"/chat/sesiones/{sid}/mensajes", headers=h(sesiones, "admin")).status_code == 200
+
+
+def test_chat_no_revela_finanzas_a_quien_no_tiene_permiso(sesiones):
+    r = c.post("/chat/ask", headers=h(sesiones, "residente"), json={"mensaje": "¿cuál es el saldo?"}).json()
+    assert "no tiene acceso" in r["respuesta"].lower()
+    assert "$" not in r["respuesta"]
+    r = c.post("/chat/ask", headers=h(sesiones, "seguridad"), json={"mensaje": "lista de residentes"}).json()
+    assert "no tiene acceso" not in r["respuesta"].lower()  # seguridad sí ve residentes
+    r = c.post("/chat/ask", headers=h(sesiones, "tesoreria"), json={"mensaje": "¿cuál es el saldo?"}).json()
+    assert "saldo" in r["respuesta"].lower() and "no tiene acceso" not in r["respuesta"].lower()
+
+
+# ---------------------------------------------------------------------------
+# 6. Notificaciones filtradas por módulo
+# ---------------------------------------------------------------------------
+def test_notificaciones_filtradas_por_permisos(sesiones):
+    tipos = lambda rol: {n["tipo"] for n in c.get("/notificaciones", headers=h(sesiones, rol)).json()}  # noqa: E731
+    assert not tipos("residente") & {"mora", "proximo"}       # sin finanzas
+    assert not tipos("seguridad") & {"mora", "proximo"}
+    assert not tipos("tesoreria") & {"evento", "mantenimiento"}

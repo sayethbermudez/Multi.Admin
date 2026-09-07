@@ -8,7 +8,10 @@ from app.auth_jwt import crear_token, segundos_restantes
 from app.database import get_db
 from app.rate_limit import limitar, resetear
 from app.models import Rol
-from app.deps import get_current_user
+from app.deps import get_current_user, usuario_tiene_permiso
+from app.models import Usuario
+from app.auth_jwt import verificar_token
+from app.permisos import RESIDENTE
 from app.redis_client import revocar_token
 
 router = APIRouter(tags=["Autenticación"])
@@ -24,8 +27,38 @@ def listar_roles(db: Session = Depends(get_db)):
     return [{"id": r.id, "nombre": r.nombre} for r in db.query(Rol).all()]
 
 
+def _usuario_opcional(authorization: str | None, db: Session) -> Usuario | None:
+    """Devuelve el usuario autenticado si viene un Bearer válido; None si no."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    payload = verificar_token(authorization.split(" ", 1)[1].strip())
+    if not payload or payload.get("sub") is None:
+        return None
+    u = db.query(Usuario).get(int(payload["sub"]))
+    return u if u and u.activo else None
+
+
 @router.post("/register", response_model=schemas.UsuarioResponse)
-def registrar(usuario: schemas.UsuarioCreate, db: Session = Depends(get_db)):
+def registrar(
+    usuario: schemas.UsuarioCreate,
+    authorization: str = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Registro público: siempre crea un *residente*.
+    Solo un usuario autenticado con `usuarios.crear` puede asignar otro rol
+    (y únicamente el super_admin puede crear otros super_admin)."""
+    actual = _usuario_opcional(authorization, db)
+    if usuario.rol_id != RESIDENTE:
+        if not actual or not usuario_tiene_permiso(db, actual, "usuarios.crear"):
+            raise HTTPException(
+                status_code=403,
+                detail="No tienes permiso para crear usuarios con ese rol.",
+            )
+        if usuario.rol_id == 1 and actual.rol_id != 1:
+            raise HTTPException(
+                status_code=403,
+                detail="Solo un super administrador puede crear otro super administrador.",
+            )
     try:
         nuevo = crud.crear_usuario(db, usuario)
     except ValueError as e:

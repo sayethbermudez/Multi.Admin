@@ -18,6 +18,7 @@ import ChatSesiones from "@/pages/Dashboard/ChatSesiones";
 import Configuracion from "@/pages/Dashboard/Configuracion";
 import { useAuth } from "@/context/AuthContext";
 import { puedeVerModulo, tienePermiso } from "@/lib/permisos";
+import SinPermiso from "@/pages/Dashboard/SinPermiso";
 
 // Ruta protegida: exige sesión iniciada.
 function Protegida({ children }: { children: React.ReactNode }) {
@@ -26,42 +27,18 @@ function Protegida({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-/** Ruta de chat: exige el permiso chat.usar. */
-function ConPermisoChat({ children }: { children: React.ReactNode }) {
+/** Exige un permiso concreto; si falta, muestra la página "Sin permiso"
+ *  (en vez de redirigir en silencio, para que el usuario entienda qué pasó). */
+function RequierePermiso({ codigo, children }: { codigo: string; children: React.ReactNode }) {
   const { usuario } = useAuth();
-  if (!tienePermiso(usuario, "chat.usar")) return <Navigate to="/dashboard" replace />;
+  if (!tienePermiso(usuario, codigo)) return <SinPermiso permiso={codigo} />;
   return <>{children}</>;
 }
 
-/** Ruta de configuración: exige el permiso config.ver. */
-function ConPermisoConfig({ children }: { children: React.ReactNode }) {
+/** Ruta protegida + permiso de módulo (`<modulo>.ver`). */
+function ConPermiso({ modulo, children }: { modulo: string; children: React.ReactNode }) {
   const { usuario } = useAuth();
-  if (!tienePermiso(usuario, "config.ver")) return <Navigate to="/dashboard" replace />;
-  return <>{children}</>;
-}
-
-/** Ruta protegida + permiso de módulo: si el rol del usuario no puede ver el
- *  módulo, redirige al dashboard. Esto alinea el rol con los permisos (RBAC).
- */
-function ConPermiso({
-  modulo,
-  children,
-}: {
-  modulo:
-    | "dashboard"
-    | "usuarios"
-    | "residentes"
-    | "propiedades"
-    | "finanzas"
-    | "mantenimiento"
-    | "documentos"
-    | "eventos";
-  children: React.ReactNode;
-}) {
-  const { usuario } = useAuth();
-  if (!puedeVerModulo(usuario, modulo)) {
-    return <Navigate to="/dashboard" replace />;
-  }
+  if (!puedeVerModulo(usuario, modulo)) return <SinPermiso permiso={`${modulo}.ver`} />;
   return <>{children}</>;
 }
 
@@ -95,8 +72,8 @@ export default function App() {
           <Route path="mantenimiento" element={<ConPermiso modulo="mantenimiento"><Mantenimiento /></ConPermiso>} />
           <Route path="documentos" element={<ConPermiso modulo="documentos"><Documentos /></ConPermiso>} />
           <Route path="eventos" element={<ConPermiso modulo="eventos"><Eventos /></ConPermiso>} />
-          <Route path="chat" element={<ConPermisoChat><ChatSesiones /></ConPermisoChat>} />
-          <Route path="configuracion" element={<ConPermisoConfig><Configuracion /></ConPermisoConfig>} />
+          <Route path="chat" element={<RequierePermiso codigo="chat.usar"><ChatSesiones /></RequierePermiso>} />
+          <Route path="configuracion" element={<ConPermiso modulo="config"><Configuracion /></ConPermiso>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

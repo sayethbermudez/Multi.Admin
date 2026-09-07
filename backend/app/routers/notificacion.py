@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, usuario_tiene_permiso
 from app import models
 
 router = APIRouter(prefix="/notificaciones", tags=["Notificaciones"])
@@ -17,19 +17,21 @@ def _money(v) -> str:
 
 @router.get("")
 def listar_notificaciones(
-    _usuario=Depends(get_current_user),
+    usuario=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Devuelve recordatorios de: pagos vencidos/próximos, eventos próximos
-    y mantenimientos críticos sin resolver."""
+    y mantenimientos críticos sin resolver. Cada bloque se incluye solo si
+    el rol del usuario tiene permiso de ver ese módulo (RBAC)."""
     notificaciones = []
     hoy = date.today()
+    ve = lambda modulo: usuario_tiene_permiso(db, usuario, f"{modulo}.ver")  # noqa: E731
 
     # 1) Pagos vencidos (mora) y próximos a vencer (7 días)
     concepto = {c.id: c for c in db.query(models.ConceptoFinanciero).all()}
     movs = db.query(models.MovimientoFinanciero).filter(
         models.MovimientoFinanciero.estado.in_(["pendiente", "vencido"])
-    ).order_by(models.MovimientoFinanciero.fecha_vencimiento).all()
+    ).order_by(models.MovimientoFinanciero.fecha_vencimiento).all() if ve("finanzas") else []
     for m in movs:
         tipo = "mora" if m.estado == "vencido" or (m.fecha_vencimiento and m.fecha_vencimiento < hoy) else "proximo"
         monto = _money(m.monto)
@@ -52,7 +54,7 @@ def listar_notificaciones(
     # 2) Eventos próximos (7 días)
     eventos = db.query(models.Evento).filter(
         models.Evento.fecha >= hoy, models.Evento.fecha <= hoy + timedelta(days=7)
-    ).order_by(models.Evento.fecha).all()
+    ).order_by(models.Evento.fecha).all() if ve("eventos") else []
     for ev in eventos:
         notificaciones.append({
             "tipo": "evento", "severidad": "baja",
@@ -65,7 +67,7 @@ def listar_notificaciones(
     criticas = db.query(models.TareaMantenimiento).filter(
         models.TareaMantenimiento.prioridad == "critica",
         models.TareaMantenimiento.estado != "completada",
-    ).all()
+    ).all() if ve("mantenimiento") else []
     for t in criticas:
         notificaciones.append({
             "tipo": "mantenimiento", "severidad": "alta",

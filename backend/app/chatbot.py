@@ -49,8 +49,28 @@ def _format_money(v) -> str:
     return f"${number:,.0f}".replace(",", ".")
 
 
-def responder(db: Session, mensaje: str) -> str:
+# Módulo (permiso `<modulo>.ver`) que requiere cada intent con datos reales.
+INTENT_MODULO = {
+    "balance": "finanzas", "ingresos": "finanzas", "gastos": "finanzas",
+    "pagos_pendientes": "finanzas", "mantenimiento": "mantenimiento",
+    "propiedades": "propiedades", "residentes": "residentes",
+    "documentos": "documentos", "eventos": "eventos",
+}
+
+SIN_PERMISO = (
+    "Esa información pertenece al módulo de {modulo}, al que tu rol no tiene acceso. "
+    "Si la necesitas, comunícate con la administración del conjunto. 🔒"
+)
+
+
+def responder(db: Session, mensaje: str, permisos: list[str] | None = None) -> str:
+    """Genera la respuesta. Si se pasan `permisos` (códigos RBAC del rol),
+    los intents con datos de un módulo se responden solo si el rol puede verlo."""
     intent = detectar_intent(mensaje)
+
+    modulo = INTENT_MODULO.get(intent)
+    if permisos is not None and modulo and f"{modulo}.ver" not in permisos:
+        return SIN_PERMISO.format(modulo=modulo)
 
     respuestas = {
         "saludo": (

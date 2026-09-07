@@ -7,14 +7,18 @@ import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useFetch } from "@/hooks/useFetch";
 import { usePermisos } from "@/lib/usePermisos";
+import { rolesAsignables, ROL_SUPER_ADMIN } from "@/lib/permisos";
 import { api } from "@/lib/api";
 import type { Usuario } from "@/types";
 
 const emptyForm = { nombre: "", correo: "", contrasena: "", telefono: "", rol_id: 3 };
 
 export default function Usuarios() {
-  const { puede } = usePermisos();
+  const { puede, esSuper, usuario: yo } = usePermisos();
   const { data: usuarios, cargar, cargando } = useFetch<Usuario[]>("/usuarios");
+  const roles = rolesAsignables(yo);
+  // Un admin normal no puede tocar cuentas super_admin; nadie se elimina a sí mismo.
+  const puedeGestionar = (u: Usuario) => esSuper() || u.rol_id !== ROL_SUPER_ADMIN;
   const [abierto, setAbierto] = useState(false);
   const [editando, setEditando] = useState<Usuario | null>(null);
   const [eliminando, setEliminando] = useState<Usuario | null>(null);
@@ -57,6 +61,8 @@ export default function Usuarios() {
   };
 
   const alternarEstado = async (u: Usuario) => {
+    if (!puede("usuarios.editar") || !puedeGestionar(u) || u.id === yo?.id) return;
+    setError("");
     try {
       await api.put(`/usuarios/${u.id}`, { activo: !u.activo });
       await cargar();
@@ -117,17 +123,21 @@ export default function Usuarios() {
                 <td className="py-2.5 text-gray-500">{u.correo}</td>
                 <td className="py-2.5"><Badge color="info">{u.nombre_rol}</Badge></td>
                 <td className="py-2.5">
-                  <button onClick={() => alternarEstado(u)} title={u.activo ? "Desactivar" : "Activar"}>
+                  {puede("usuarios.editar") && puedeGestionar(u) && u.id !== yo?.id ? (
+                    <button onClick={() => alternarEstado(u)} title={u.activo ? "Desactivar" : "Activar"}>
+                      <Badge color={u.activo ? "success" : "neutral"}>{u.activo ? "Activo" : "Inactivo"}</Badge>
+                    </button>
+                  ) : (
                     <Badge color={u.activo ? "success" : "neutral"}>{u.activo ? "Activo" : "Inactivo"}</Badge>
-                  </button>
+                  )}
                 </td>
                 <td className="py-2.5">
                   <div className="flex gap-1">
-                    {puede("usuarios.editar") && (<button onClick={() => abrirEdicion(u)} title="Editar"
+                    {puede("usuarios.editar") && puedeGestionar(u) && (<button onClick={() => abrirEdicion(u)} title="Editar"
                       className="p-1.5 rounded-lg btn btn-ghost text-primary-600 hover:bg-blue-50">
                       <Pencil className="w-4 h-4" />
                     </button>)}
-                    {puede("usuarios.eliminar") && (<button onClick={() => setEliminando(u)} title="Eliminar"
+                    {puede("usuarios.eliminar") && puedeGestionar(u) && u.id !== yo?.id && (<button onClick={() => setEliminando(u)} title="Eliminar"
                       className="p-1.5 rounded-lg btn btn-ghost text-danger hover:bg-red-50">
                       <Trash2 className="w-4 h-4" />
                     </button>)}
@@ -170,10 +180,7 @@ export default function Usuarios() {
           <div>
             <label className="label">Rol</label>
             <select className="input" value={form.rol_id} onChange={(e) => setForm({ ...form, rol_id: Number(e.target.value) })}>
-              <option value={2}>Administrador</option>
-              <option value={3}>Residente</option>
-              <option value={4}>Tesorería</option>
-              <option value={5}>Seguridad</option>
+              {roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
             </select>
           </div>
           {error && <div className="text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
@@ -198,12 +205,11 @@ export default function Usuarios() {
           </div>
           <div>
             <label className="label">Rol</label>
-            <select className="input" value={form.rol_id} onChange={(e) => setForm({ ...form, rol_id: Number(e.target.value) })}>
-            <option value={2}>Administrador</option>
-            <option value={3}>Residente</option>
-            <option value={4}>Tesorería</option>
-            <option value={5}>Seguridad</option>
+            <select className="input" value={form.rol_id} disabled={editando?.id === yo?.id}
+              onChange={(e) => setForm({ ...form, rol_id: Number(e.target.value) })}>
+              {roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
             </select>
+            {editando?.id === yo?.id && <p className="text-xs text-gray-400 mt-1">No puedes cambiar tu propio rol.</p>}
           </div>
           <p className="text-xs text-gray-400">Para cambiar la contraseña usa la opción de recuperación.</p>
           {error && <div className="text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}

@@ -18,7 +18,7 @@ const BASE = import.meta.env.VITE_API_URL || "/api";
 
 // Configuración global + respaldo de base de datos (solo administradores).
 export default function Configuracion() {
-  const { puede, esAdmin } = usePermisos();
+  const { puede } = usePermisos();
   const { data, setData, cargar, cargando } = useFetch<ConfItem[]>("/configuracion");
   const [editando, setEditando] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
@@ -68,7 +68,7 @@ export default function Configuracion() {
           <h2 className="text-lg font-semibold">Configuración del sistema</h2>
           <p className="text-sm text-gray-500">Parámetros globales de la copropiedad.</p>
         </div>
-        {esAdmin() && (
+        {puede("sistema.respaldar") && (
           <Button variante="outline" tamano="sm" onClick={respaldar} disabled={respaldando}>
             {respaldando ? <Loader2 className="w-4 h-4 animate-spin" /> : <DatabaseBackup className="w-4 h-4" />}
             Respaldar BD

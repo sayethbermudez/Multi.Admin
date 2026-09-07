@@ -41,6 +41,17 @@ def get_rol_nombre(db: Session, rol_id: int) -> str:
     return rol.nombre if rol else "sin_rol"
 
 
+def usuario_tiene_permiso(db: Session, usuario: Usuario, codigo: str) -> bool:
+    """¿El rol del usuario tiene el permiso `codigo`? (consulta rol_permisos)."""
+    return (
+        db.query(RolPermiso)
+        .join(Permiso, Permiso.id == RolPermiso.permiso_id)
+        .filter(RolPermiso.rol_id == usuario.rol_id, Permiso.codigo == codigo)
+        .first()
+        is not None
+    )
+
+
 def require_permiso(codigo: str):
     """Dependencia de autorización: exige que el rol del usuario autenticado
     tenga el permiso `codigo` (tabla rol_permisos). Devuelve 403 si no."""
@@ -48,19 +59,26 @@ def require_permiso(codigo: str):
         usuario: Usuario = Depends(get_current_user),
         db: Session = Depends(get_db),
     ) -> Usuario:
-        permiso = db.query(Permiso).filter(Permiso.codigo == codigo).first()
-        if not permiso:
-            raise HTTPException(status_code=403, detail=f"Permiso '{codigo}' no definido.")
-
-        tiene = (
-            db.query(RolPermiso)
-            .filter(RolPermiso.rol_id == usuario.rol_id, RolPermiso.permiso_id == permiso.id)
-            .first()
-        )
-        if not tiene:
+        if not usuario_tiene_permiso(db, usuario, codigo):
             raise HTTPException(
                 status_code=403,
                 detail=f"El rol '{get_rol_nombre(db, usuario.rol_id)}' no tiene el permiso '{codigo}'.",
+            )
+        return usuario
+
+    return _dependencia
+
+
+def require_alguno(*codigos: str):
+    """Autoriza si el rol tiene AL MENOS UNO de los permisos indicados."""
+    def _dependencia(
+        usuario: Usuario = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> Usuario:
+        if not any(usuario_tiene_permiso(db, usuario, c) for c in codigos):
+            raise HTTPException(
+                status_code=403,
+                detail=f"El rol '{get_rol_nombre(db, usuario.rol_id)}' no tiene permiso para esta acción.",
             )
         return usuario
 
