@@ -13,7 +13,7 @@ export default function Register() {
   const [contrasena, setContrasena] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [error, setError] = useState("");
-  const [exito, setExito] = useState(false);
+  const [exito, setExito] = useState<{ mensaje: string; link?: string } | null>(null);
   const [cargando, setCargando] = useState(false);
 
   const enviar = async (e: FormEvent) => {
@@ -29,15 +29,19 @@ export default function Register() {
     }
     setCargando(true);
     try {
-      await api.post<Usuario>("/register", {
+      const r = await api.post<Usuario & { verificacion?: { mensaje: string; link?: string } }>("/register", {
         nombre,
         telefono,
         correo,
         contrasena,
         rol_id: 3, // residente por defecto
       });
-      setExito(true);
-      setTimeout(() => navigate("/login"), 1500);
+      if (r.verificacion) {
+        setExito({ mensaje: r.verificacion.mensaje, link: r.verificacion.link });
+      } else {
+        setExito({ mensaje: "Redirigiendo al inicio de sesión..." });
+        setTimeout(() => navigate("/login"), 1500);
+      }
     } catch (err) {
       const d = (err as { detail?: string }).detail;
       const m = (err as Error).message;
@@ -62,9 +66,17 @@ export default function Register() {
     >
       {exito ? (
         <div className="text-center py-8">
-          <div className="text-5xl mb-3">✅</div>
+          <div className="text-5xl mb-3">📬</div>
           <p className="text-lg font-semibold text-gray-800">¡Cuenta creada!</p>
-          <p className="text-sm text-gray-500 mt-1">Redirigiendo al inicio de sesión...</p>
+          <p className="text-sm text-gray-500 mt-2">{exito.mensaje}</p>
+          <p className="text-xs text-gray-400 mt-1">Enviado a <span className="font-medium text-gray-600">{correo}</span></p>
+          {exito.link && (
+            <div className="mt-4 p-4 rounded-2xl bg-blue-50 border border-blue-200 text-left">
+              <p className="text-xs font-semibold text-blue-700 mb-1">🔧 Modo demo (sin SMTP configurado)</p>
+              <a href={exito.link} className="text-sm break-all text-primary-600 font-medium underline">{exito.link}</a>
+            </div>
+          )}
+          <Link to="/login" className="mt-5 inline-block text-primary-600 font-medium hover:underline">Ir a iniciar sesión</Link>
         </div>
       ) : (
         <form onSubmit={enviar} className="space-y-4">

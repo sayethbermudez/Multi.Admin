@@ -42,6 +42,7 @@ def ejecutar_seed(db: Session) -> None:
         contrasena_hash=hashear_password("Admin2026!"),
         rol_id=admin_rol.id,
         activo=True,
+        correo_verificado=True,
         fecha_creacion=datetime.utcnow(),
     )
     db.add(super_admin)

@@ -1,15 +1,13 @@
 """Operaciones de autenticación, usuarios y recuperación de contraseña."""
-import asyncio
 import logging
 import os
 import secrets
 from datetime import datetime, timedelta
 
-from fastapi_mail import FastMail, MessageSchema, MessageType
 from sqlalchemy.orm import Session
 
+from app import correo as correo_svc
 from app.models import Usuario, Rol, Permiso, RolPermiso
-from app.email_config import conf, mail_configurado
 from app.security import hashear_password, verificar_password
 
 logger = logging.getLogger(__name__)
@@ -18,7 +16,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # USUARIOS
 # ---------------------------------------------------------------------------
-def crear_usuario(db: Session, datos) -> Usuario:
+VERIFICACION_HORAS = 24
+
+
+def crear_usuario(db: Session, datos, verificado: bool = False) -> Usuario:
+    """Crea el usuario. Si `verificado` es False se genera un token de
+    verificación de correo y la cuenta no podrá iniciar sesión hasta confirmarlo."""
     existe = db.query(Usuario).filter(Usuario.correo == datos.correo).first()
     if existe:
         raise ValueError("Ya existe un usuario registrado con ese correo.")
@@ -32,6 +35,9 @@ def crear_usuario(db: Session, datos) -> Usuario:
         activo=True,
         fecha_creacion=datetime.utcnow(),
         id_copropiedad=datos.id_copropiedad,
+        correo_verificado=verificado,
+        token_verificacion=None if verificado else secrets.token_urlsafe(32),
+        expira_verificacion=None if verificado else datetime.utcnow() + timedelta(hours=VERIFICACION_HORAS),
     )
     db.add(nuevo)
     db.commit()
@@ -105,6 +111,7 @@ def serializar_usuario(u: Usuario, db: Session) -> dict:
         "nombre_rol": rol.nombre if rol else "sin rol",
         "activo": u.activo,
         "id_copropiedad": u.id_copropiedad,
+        "correo_verificado": bool(u.correo_verificado),
         "permisos": obtener_permisos_rol(db, u.rol_id),
     }
 
@@ -112,6 +119,10 @@ def serializar_usuario(u: Usuario, db: Session) -> dict:
 # ---------------------------------------------------------------------------
 # LOGIN
 # ---------------------------------------------------------------------------
+class CorreoNoVerificado(Exception):
+    """Credenciales correctas pero el correo aún no fue confirmado."""
+
+
 def login_usuario(db: Session, correo: str, password: str):
     usuario = db.query(Usuario).filter(Usuario.correo == correo.strip()).first()
     if not usuario:
@@ -120,61 +131,54 @@ def login_usuario(db: Session, correo: str, password: str):
         return None
     if not verificar_password(password, usuario.contrasena_hash):
         return None
+    if not usuario.correo_verificado:
+        raise CorreoNoVerificado()
     usuario.ultimo_acceso = datetime.utcnow()
     db.commit()
     return usuario
 
 
 # ---------------------------------------------------------------------------
+# VERIFICACIÓN DE CORREO
+# ---------------------------------------------------------------------------
+async def enviar_verificacion(db: Session, usuario: Usuario) -> dict:
+    """(Re)genera el token de verificación y envía el correo."""
+    usuario.token_verificacion = secrets.token_urlsafe(32)
+    usuario.expira_verificacion = datetime.utcnow() + timedelta(hours=VERIFICACION_HORAS)
+    db.commit()
+    return await correo_svc.enviar_verificacion(usuario.correo, usuario.nombre, usuario.token_verificacion)
+
+
+def verificar_correo(db: Session, token: str) -> str:
+    """Devuelve 'ok', 'expirado' o 'invalido'."""
+    usuario = db.query(Usuario).filter(Usuario.token_verificacion == token).first()
+    if not usuario:
+        return "invalido"
+    if usuario.expira_verificacion and usuario.expira_verificacion < datetime.utcnow():
+        return "expirado"
+    usuario.correo_verificado = True
+    usuario.token_verificacion = None
+    usuario.expira_verificacion = None
+    db.commit()
+    return "ok"
+
+
+# ---------------------------------------------------------------------------
 # RECUPERACIÓN DE CONTRASEÑA (envía correo real vía SMTP)
 # ---------------------------------------------------------------------------
 async def enviar_recuperacion(db: Session, correo: str) -> dict:
-    """Genera token, lo guarda en BD y envía el correo con el enlace."""
+    """Genera token (30 min), lo guarda en BD y envía el correo con el enlace."""
     correo_limpio = correo.strip()
     usuario = db.query(Usuario).filter(Usuario.correo == correo_limpio).first()
-
     if not usuario:
         logger.info("[recuperacion] Solicitud para un correo no registrado")
         return {"enviado": False, "error": None}
-
-    frontend_url = os.getenv("FRONTEND_URL", "").strip()
-    if not frontend_url:
-        return {"enviado": False, "error": "Falta configurar FRONTEND_URL"}
 
     token = secrets.token_urlsafe(32)
     usuario.token_recuperacion = token
     usuario.expira_token = datetime.utcnow() + timedelta(minutes=30)
     db.commit()
-
-    link = f"{frontend_url.rstrip('/')}/restablecer/{token}"
-
-    if not mail_configurado():
-        # Si no hay SMTP real, guardamos el enlace para poder probar.
-        logger.warning("[recuperacion] SMTP no configurado; token guardado en BD.")
-        return {"enviado": False, "sin_smtp": True, "link": link}
-
-    mensaje = MessageSchema(
-        subject="Recuperación de contraseña - Multi-Administrador",
-        recipients=[correo_limpio],
-        body=(
-            f"Hola {usuario.nombre},\n\n"
-            "Se solicitó recuperar tu contraseña.\n\n"
-            f"Utiliza este enlace para establecer una nueva contraseña:\n{link}\n\n"
-            "Este enlace expirará en 30 minutos.\n\n"
-            "Si no solicitaste este cambio, puedes ignorar este correo.\n\n"
-            "Equipo Multi-Administrador."
-        ),
-        subtype=MessageType.plain,
-    )
-
-    try:
-        fast_mail = FastMail(conf)
-        await asyncio.wait_for(fast_mail.send_message(mensaje), timeout=30)
-        logger.info("[recuperacion] Correo enviado correctamente")
-        return {"enviado": True, "error": None}
-    except Exception as error:
-        logger.exception("[recuperacion] Error al enviar el correo")
-        return {"enviado": False, "error": f"{type(error).__name__}: {error}", "link": link}
+    return await correo_svc.enviar_recuperacion(usuario.correo, usuario.nombre, token)
 
 
 def cambiar_password(db: Session, token: str, nueva_password: str) -> bool:

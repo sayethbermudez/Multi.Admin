@@ -39,6 +39,11 @@ class Usuario(Base):
     token_recuperacion = Column(String(255), nullable=True)
     expira_token = Column(DateTime, nullable=True)
 
+    # Verificación de correo electrónico
+    correo_verificado = Column(Boolean, default=False, nullable=False, server_default="false")
+    token_verificacion = Column(String(255), nullable=True)
+    expira_verificacion = Column(DateTime, nullable=True)
+
     rol = relationship("Rol", back_populates="usuarios")
 
 

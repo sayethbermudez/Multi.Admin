@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import AuthShell from "@/components/ui/AuthShell";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/api";
 
 export default function Login() {
   const { login, cargando } = useAuth();
@@ -10,16 +11,30 @@ export default function Login() {
   const [correo, setCorreo] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [noVerificado, setNoVerificado] = useState(false);
+  const [reenviado, setReenviado] = useState("");
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
+    setNoVerificado(false);
+    setReenviado("");
     try {
       await login(correo, password);
       navigate("/dashboard");
     } catch (err) {
       const m = (err as Error).message;
+      if (m.toLowerCase().includes("verificar tu correo")) setNoVerificado(true);
       setError(m.includes("incorrect") ? "Correo o contraseña incorrectos." : m);
+    }
+  };
+
+  const reenviar = async () => {
+    try {
+      const r = await api.post<{ mensaje: string; link?: string }>("/reenviar-verificacion", { correo });
+      setReenviado(r.link ? `${r.mensaje} (modo demo: ${r.link})` : r.mensaje);
+    } catch (err) {
+      setReenviado((err as Error).message);
     }
   };
 
@@ -65,7 +80,15 @@ export default function Login() {
           />
         </div>
 
-        {error && (
+        {noVerificado && (
+          <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2 space-y-1">
+            <p>Tu cuenta aún no está verificada.</p>
+            {reenviado ? <p className="text-xs break-all">{reenviado}</p> : (
+              <button type="button" onClick={reenviar} className="text-primary-600 font-semibold hover:underline text-xs">Reenviar correo de verificación</button>
+            )}
+          </div>
+        )}
+        {error && !noVerificado && (
           <div className="text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3 py-2">
             {error}
           </div>

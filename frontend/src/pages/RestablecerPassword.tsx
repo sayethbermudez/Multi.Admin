@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import AuthShell from "@/components/ui/AuthShell";
 import Button from "@/components/ui/Button";
@@ -11,6 +11,13 @@ export default function RestablecerPassword() {
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [cargando, setCargando] = useState(false);
+  const [tokenValido, setTokenValido] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    api.get<{ valido: boolean }>(`/validar-token-recuperacion/${token}`)
+      .then((r) => setTokenValido(r.valido))
+      .catch(() => setTokenValido(false));
+  }, [token]);
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault();
@@ -29,6 +36,7 @@ export default function RestablecerPassword() {
         token,
         nueva_password: password,
       });
+      if (!res.ok) { setError(res.mensaje); return; }
       setMensaje(res.mensaje || "Contraseña actualizada.");
     } catch (err) {
       setError((err as Error).message);
@@ -47,7 +55,14 @@ export default function RestablecerPassword() {
         </Link>
       }
     >
-      {mensaje ? (
+      {tokenValido === false && !mensaje ? (
+        <div className="text-center py-8">
+          <div className="text-5xl mb-3">⌛</div>
+          <p className="text-lg font-semibold text-gray-800">Este enlace es inválido o ya expiró.</p>
+          <p className="text-sm text-gray-500 mt-1">Los enlaces duran 30 minutos.</p>
+          <Link to="/recuperar" className="btn btn-primary px-6 py-3 mt-5 inline-flex">Solicitar uno nuevo</Link>
+        </div>
+      ) : mensaje ? (
         <div className="text-center py-8">
           <div className="text-5xl mb-3">🔐</div>
           <p className="text-lg font-semibold text-gray-800">{mensaje}</p>

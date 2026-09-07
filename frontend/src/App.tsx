@@ -5,6 +5,7 @@ import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import Recuperar from "@/pages/Recuperar";
 import RestablecerPassword from "@/pages/RestablecerPassword";
+import VerificarCorreo from "@/pages/VerificarCorreo";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Inicio from "@/pages/Dashboard/Inicio";
 import Usuarios from "@/pages/Dashboard/Usuarios";
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/recuperar" element={<Recuperar />} />
         <Route path="/restablecer/:token" element={<RestablecerPassword />} />
+        <Route path="/verificar/:token" element={<VerificarCorreo />} />
 
         {/* Rutas protegidas del dashboard */}
         <Route

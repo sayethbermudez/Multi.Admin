@@ -13,6 +13,7 @@ from app.models import Usuario
 from app.auth_jwt import verificar_token
 from app.permisos import RESIDENTE
 from app.redis_client import revocar_token
+from app import correo as correo_svc
 
 router = APIRouter(tags=["Autenticación"])
 
@@ -38,16 +39,22 @@ def _usuario_opcional(authorization: str | None, db: Session) -> Usuario | None:
     return u if u and u.activo else None
 
 
-@router.post("/register", response_model=schemas.UsuarioResponse)
-def registrar(
+@router.post("/register")
+async def registrar(
+    request: Request,
     usuario: schemas.UsuarioCreate,
     authorization: str = Header(None),
     db: Session = Depends(get_db),
 ):
-    """Registro público: siempre crea un *residente*.
+    """Registro público: siempre crea un *residente* y envía un correo de
+    verificación; la cuenta no puede iniciar sesión hasta confirmarlo.
     Solo un usuario autenticado con `usuarios.crear` puede asignar otro rol
-    (y únicamente el super_admin puede crear otros super_admin)."""
+    (y únicamente el super_admin puede crear otros super_admin); las cuentas
+    creadas por un administrador quedan verificadas de inmediato."""
     actual = _usuario_opcional(authorization, db)
+    # Anti-abuso solo para el registro público (los administradores no se limitan).
+    if not actual:
+        limitar(request, "register", max_intentos=10, ventana_segundos=300)
     if usuario.rol_id != RESIDENTE:
         if not actual or not usuario_tiene_permiso(db, actual, "usuarios.crear"):
             raise HTTPException(
@@ -59,18 +66,73 @@ def registrar(
                 status_code=403,
                 detail="Solo un super administrador puede crear otro super administrador.",
             )
+    creado_por_admin = bool(actual and usuario_tiene_permiso(db, actual, "usuarios.crear"))
     try:
-        nuevo = crud.crear_usuario(db, usuario)
+        nuevo = crud.crear_usuario(db, usuario, verificado=creado_por_admin)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return crud.serializar_usuario(nuevo, db)
+
+    respuesta = crud.serializar_usuario(nuevo, db)
+    if not creado_por_admin:
+        envio = await correo_svc.enviar_verificacion(nuevo.correo, nuevo.nombre, nuevo.token_verificacion)
+        respuesta["verificacion"] = {
+            "requerida": True,
+            "enviado": bool(envio.get("enviado")),
+            "mensaje": (
+                "Te enviamos un correo para verificar tu cuenta. Revisa tu bandeja de entrada (y el spam)."
+                if envio.get("enviado")
+                else "No se pudo enviar el correo de verificación. Usa la opción 'Reenviar verificación'."
+            ),
+        }
+        # Modo demo (sin SMTP): se devuelve el enlace para poder probar el flujo.
+        if envio.get("sin_smtp"):
+            respuesta["verificacion"]["modo"] = "demo"
+            respuesta["verificacion"]["link"] = envio.get("link")
+    return respuesta
+
+
+@router.get("/verificar-correo/{token}")
+def verificar_correo(token: str, db: Session = Depends(get_db)):
+    """Confirma el correo a partir del token enviado por email."""
+    estado = crud.verificar_correo(db, token)
+    mensajes = {
+        "ok": "¡Correo verificado! Ya puedes iniciar sesión.",
+        "expirado": "El enlace de verificación expiró. Solicita uno nuevo.",
+        "invalido": "El enlace de verificación es inválido o ya fue utilizado.",
+    }
+    return {"ok": estado == "ok", "estado": estado, "mensaje": mensajes[estado]}
+
+
+@router.post("/reenviar-verificacion")
+async def reenviar_verificacion(
+    request: Request,
+    datos: schemas.ReenviarVerificacion,
+    db: Session = Depends(get_db),
+):
+    """Reenvía el correo de verificación. No revela si el correo existe."""
+    limitar(request, "reenviar-verificacion", max_intentos=5, ventana_segundos=300)
+    respuesta = {"mensaje": "Si el correo está registrado y pendiente de verificación, te enviamos un nuevo enlace."}
+    usuario = db.query(Usuario).filter(Usuario.correo == datos.correo.strip()).first()
+    if usuario and not usuario.correo_verificado:
+        envio = await crud.enviar_verificacion(db, usuario)
+        if envio.get("sin_smtp"):
+            respuesta["modo"] = "demo"
+            respuesta["link"] = envio.get("link")
+    return respuesta
 
 
 @router.post("/login")
 def login(request: Request, datos: LoginRequest, db: Session = Depends(get_db)):
     limitar(request, "login", max_intentos=5, ventana_segundos=60)
 
-    usuario = crud.login_usuario(db, datos.correo, datos.password)
+    try:
+        usuario = crud.login_usuario(db, datos.correo, datos.password)
+    except crud.CorreoNoVerificado:
+        return {
+            "ok": False,
+            "codigo": "correo_no_verificado",
+            "mensaje": "Debes verificar tu correo antes de iniciar sesión. Revisa tu bandeja de entrada.",
+        }
     if not usuario:
         return {"ok": False, "mensaje": "Correo o contraseña incorrectos."}
 
@@ -112,11 +174,11 @@ async def recuperar_password(
     datos: schemas.RecuperarPassword,
     db: Session = Depends(get_db),
 ):
-    limitar(request, "recuperar-password", max_intentos=3, ventana_segundos=300)
+    limitar(request, "recuperar-password", max_intentos=5, ventana_segundos=300)
     result = await crud.enviar_recuperacion(db, datos.correo)
 
     # No se revela si el correo existe (anti-enumeración).
-    respuesta = {"mensaje": "Si el correo existe, se envió un enlace de recuperación."}
+    respuesta = {"mensaje": "Si el correo existe, te enviamos un enlace de recuperación."}
 
     # Modo demo/desarrollo: sin SMTP configurado, devolvemos el enlace generado
     # para que el flujo completo se pueda probar (en producción se envía por correo).
@@ -124,6 +186,15 @@ async def recuperar_password(
         respuesta["modo"] = "demo"
         respuesta["link"] = result["link"]
     return respuesta
+
+
+@router.get("/validar-token-recuperacion/{token}")
+def validar_token_recuperacion(token: str, db: Session = Depends(get_db)):
+    """Permite al frontend saber si el enlace sigue vigente antes de mostrar el formulario."""
+    from datetime import datetime
+    u = db.query(Usuario).filter(Usuario.token_recuperacion == token).first()
+    valido = bool(u and u.expira_token and u.expira_token >= datetime.utcnow())
+    return {"valido": valido}
 
 
 @router.post("/restablecer-password")

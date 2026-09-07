@@ -79,11 +79,19 @@ def sesiones():
     return out
 
 
+def _db_url() -> str:
+    """DATABASE_URL del .env del backend (sin depender del entorno del proceso,
+    que otros tests —test_unit— pueden sobrescribir con sqlite)."""
+    from dotenv import dotenv_values
+    valores = dotenv_values(os.path.join(os.path.dirname(__file__), "..", ".env"))
+    url = valores.get("DATABASE_URL") or os.getenv("DATABASE_URL", "")
+    assert url.startswith("postgresql"), f"DATABASE_URL no es PostgreSQL: {url}"
+    return url
+
+
 def _promover_por_sql(correo: str):
     import psycopg2
-    from dotenv import load_dotenv
-    load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
-    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    conn = psycopg2.connect(_db_url())
     with conn, conn.cursor() as cur:
         cur.execute("UPDATE usuarios SET rol_id = 1 WHERE correo = %s", (correo,))
     conn.close()
@@ -347,3 +355,84 @@ def test_eventos_solo_fechas_futuras(sesiones):
     assert r.status_code == 200 and r.json()["titulo"] == "Asamblea 2"
 
     c.delete(f"/eventos/{eid}", headers=hdr)
+
+
+# ---------------------------------------------------------------------------
+# 8. Verificación de correo y recuperación de contraseña
+# ---------------------------------------------------------------------------
+def _token_de(correo, campo):
+    import psycopg2
+    conn = psycopg2.connect(_db_url())
+    with conn, conn.cursor() as cur:
+        cur.execute(f"SELECT {campo} FROM usuarios WHERE correo = %s", (correo,))
+        row = cur.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def test_registro_publico_requiere_verificar_correo():
+    correo = f"nuevo.{int(time.time())}@x.com"
+    r = c.post("/register", json={"nombre": "Nuevo", "correo": correo, "contrasena": "Prueba2026!", "rol_id": 3})
+    assert r.status_code == 200, r.text
+    assert r.json()["correo_verificado"] is False
+    assert r.json()["verificacion"]["requerida"] is True
+
+    # No puede iniciar sesión hasta verificar
+    lg = c.post("/login", json={"correo": correo, "password": "Prueba2026!"}).json()
+    assert lg["ok"] is False and lg.get("codigo") == "correo_no_verificado"
+
+    # Token inválido → no verifica
+    assert c.get("/verificar-correo/token-falso").json()["estado"] == "invalido"
+
+    # Token real → verifica y ya puede entrar; el token se consume
+    tok = _token_de(correo, "token_verificacion")
+    assert tok
+    assert c.get(f"/verificar-correo/{tok}").json()["estado"] == "ok"
+    assert c.get(f"/verificar-correo/{tok}").json()["estado"] == "invalido"
+    lg = c.post("/login", json={"correo": correo, "password": "Prueba2026!"}).json()
+    assert lg["ok"] is True and lg["usuario"]["correo_verificado"] is True
+
+
+def test_reenviar_verificacion_no_revela_existencia():
+    r1 = c.post("/reenviar-verificacion", json={"correo": "nadie.inexistente@x.com"})
+    r2 = c.post("/reenviar-verificacion", json={"correo": ADMIN_EMAIL})
+    assert r1.status_code == 200 and r2.status_code == 200
+    assert r1.json()["mensaje"] == r2.json()["mensaje"]
+
+
+def test_usuarios_creados_por_admin_quedan_verificados(sesiones):
+    correo = f"poradmin.{int(time.time())}@x.com"
+    r = c.post("/register", headers=h(sesiones, "admin"), json={
+        "nombre": "Por admin", "correo": correo, "contrasena": "Prueba2026!", "rol_id": 4,
+    })
+    assert r.status_code == 200 and r.json()["correo_verificado"] is True
+    assert "verificacion" not in r.json()
+    assert c.post("/login", json={"correo": correo, "password": "Prueba2026!"}).json()["ok"] is True
+
+
+def test_recuperacion_password_flujo_completo(sesiones):
+    correo = f"olvido.{int(time.time())}@x.com"
+    c.post("/register", headers=h(sesiones, "admin"), json={
+        "nombre": "Olvidadizo", "correo": correo, "contrasena": "Vieja2026!", "rol_id": 3,
+    })
+    # Solicitud: misma respuesta exista o no el correo
+    r = c.post("/recuperar-password", json={"correo": correo})
+    assert r.status_code == 200
+    r2 = c.post("/recuperar-password", json={"correo": "no.existe.999@x.com"})
+    assert r.json()["mensaje"] == r2.json()["mensaje"]
+
+    tok = _token_de(correo, "token_recuperacion")
+    assert tok
+    assert c.get(f"/validar-token-recuperacion/{tok}").json()["valido"] is True
+    assert c.get("/validar-token-recuperacion/falso").json()["valido"] is False
+
+    # Contraseña corta → 422 ; token falso → ok False
+    assert c.post("/restablecer-password", json={"token": tok, "nueva_password": "corta"}).status_code == 422
+    assert c.post("/restablecer-password", json={"token": "falso", "nueva_password": "Nueva2026!"}).json()["ok"] is False
+
+    # Restablecer de verdad
+    assert c.post("/restablecer-password", json={"token": tok, "nueva_password": "Nueva2026!"}).json()["ok"] is True
+    assert c.post("/login", json={"correo": correo, "password": "Vieja2026!"}).json()["ok"] is False
+    assert c.post("/login", json={"correo": correo, "password": "Nueva2026!"}).json()["ok"] is True
+    # El token se consume
+    assert c.get(f"/validar-token-recuperacion/{tok}").json()["valido"] is False

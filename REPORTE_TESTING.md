@@ -147,3 +147,15 @@ backend/tests/test_unit.py   →  8 passed
 frontend/tests_ui_rbac.py    → 36/36 OK  (Playwright: login real por rol, menú, rutas bloqueadas,
                                 botones visibles/ocultos, dashboard). Capturas en capturas_rbac/
 ```
+
+---
+
+## 12. Verificación de correo y recuperación de contraseña — 2026-09-07
+
+- **Registro público** → cuenta creada con `correo_verificado = false` + token (24 h) + correo HTML con botón "Verificar mi correo" (`/verificar/{token}`). No puede iniciar sesión hasta confirmar (`codigo: correo_no_verificado`); el login ofrece "Reenviar correo de verificación".
+- **Usuarios creados por un administrador** quedan verificados de inmediato (no se les exige el paso).
+- **Recuperación** → `/recuperar-password` (respuesta idéntica exista o no el correo) → correo HTML con botón → `/restablecer/{token}` valida el enlace antes de mostrar el formulario (30 min, un solo uso, mínimo 8 caracteres).
+- **Migración automática**: al arrancar, el backend añade las columnas nuevas y marca como verificadas las cuentas existentes.
+- Sin SMTP configurado la API funciona en **modo demo** (devuelve el enlace en la respuesta).
+- Pruebas: `test_rbac.py` +4 (registro→bloqueo→verificar→login; reenvío anti-enumeración; alta por admin verificada; recuperación completa). **Total 111/111 ✅**.
+- ⚠️ Envío real con Gmail: la contraseña de aplicación suministrada fue rechazada por Google (`535 BadCredentials`) — ver README/.env.example para generar una nueva.

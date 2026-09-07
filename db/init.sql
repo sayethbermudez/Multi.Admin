@@ -48,8 +48,15 @@ CREATE TABLE IF NOT EXISTS usuarios (
     ultimo_acceso      TIMESTAMP,
     id_copropiedad     INTEGER,
     token_recuperacion VARCHAR(255),
-    expira_token       TIMESTAMP
+    expira_token       TIMESTAMP,
+    correo_verificado  BOOLEAN NOT NULL DEFAULT FALSE,
+    token_verificacion VARCHAR(255),
+    expira_verificacion TIMESTAMP
 );
+-- Migración idempotente para bases creadas antes de la verificación de correo.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS correo_verificado  BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS token_verificacion VARCHAR(255);
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS expira_verificacion TIMESTAMP;
 
 -- Residentes
 CREATE TABLE IF NOT EXISTS residentes (

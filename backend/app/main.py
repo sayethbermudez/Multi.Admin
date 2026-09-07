@@ -21,6 +21,18 @@ logging.basicConfig(level=logging.INFO)
 # Crea las tablas si no existen.
 Base.metadata.create_all(bind=engine)
 
+# Migración ligera: columnas nuevas en bases ya existentes (idempotente).
+from sqlalchemy import text  # noqa: E402
+with engine.begin() as _conn:
+    for _sql in (
+        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS correo_verificado BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS token_verificacion VARCHAR(255)",
+        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS expira_verificacion TIMESTAMP",
+        # Las cuentas creadas antes de esta función se consideran verificadas.
+        "UPDATE usuarios SET correo_verificado = TRUE WHERE token_verificacion IS NULL AND correo_verificado = FALSE",
+    ):
+        _conn.execute(text(_sql))
+
 app = FastAPI(
     title="Multi-Administrador API",
     description="API del sistema de administración de conjuntos residenciales.",

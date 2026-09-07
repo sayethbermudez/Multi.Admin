@@ -32,6 +32,7 @@ class UsuarioResponse(BaseModel):
     nombre_rol: Optional[str] = None
     activo: bool
     id_copropiedad: Optional[int] = None
+    correo_verificado: bool = True
     permisos: Optional[List[str]] = []
 
     class Config:
@@ -61,10 +62,14 @@ class NuevaPassword(BaseModel):
 
     @field_validator("nueva_password")
     @classmethod
-    def validar_nueva(cls, v: str) -> str:
+    def validar_password(cls, v: str) -> str:
         if len(v) < 8:
             raise ValueError("La contraseña debe tener al menos 8 caracteres.")
         return v
+
+
+class ReenviarVerificacion(BaseModel):
+    correo: EmailStr
 
 
 class RolResponse(BaseModel):
