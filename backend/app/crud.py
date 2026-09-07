@@ -151,14 +151,19 @@ async def enviar_verificacion(db: Session, usuario: Usuario) -> dict:
 
 def verificar_correo(db: Session, token: str) -> str:
     """Devuelve 'ok', 'expirado' o 'invalido'."""
+    if not token:
+        return "invalido"
     usuario = db.query(Usuario).filter(Usuario.token_verificacion == token).first()
     if not usuario:
         return "invalido"
+    # Idempotente: si el enlace ya se usó (doble clic, StrictMode, escáner de enlaces
+    # del proveedor de correo), se responde 'ok' en lugar de 'invalido'.
+    if usuario.correo_verificado:
+        return "ok"
     if usuario.expira_verificacion and usuario.expira_verificacion < datetime.utcnow():
         return "expirado"
     usuario.correo_verificado = True
-    usuario.token_verificacion = None
-    usuario.expira_verificacion = None
+    # El token se conserva (ya no otorga nada nuevo) para que reabrir el enlace siga mostrando 'ok'.
     db.commit()
     return "ok"
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Loader2, MailCheck, MailWarning } from "lucide-react";
 import AuthShell from "@/components/ui/AuthShell";
@@ -16,7 +16,11 @@ export default function VerificarCorreo() {
   const [reenviado, setReenviado] = useState("");
   const [enviando, setEnviando] = useState(false);
 
+  const verificado = useRef<string | null>(null);
+
   useEffect(() => {
+    if (!token || verificado.current === token) return; // evita la doble llamada de StrictMode
+    verificado.current = token;
     api
       .get<{ ok: boolean; estado: Estado; mensaje: string }>(`/verificar-correo/${token}`)
       .then((r) => { setEstado(r.estado); setMensaje(r.mensaje); })

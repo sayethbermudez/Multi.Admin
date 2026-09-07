@@ -384,11 +384,11 @@ def test_registro_publico_requiere_verificar_correo():
     # Token inválido → no verifica
     assert c.get("/verificar-correo/token-falso").json()["estado"] == "invalido"
 
-    # Token real → verifica y ya puede entrar; el token se consume
+    # Token real → verifica y ya puede entrar; reabrir el enlace sigue siendo 'ok' (idempotente)
     tok = _token_de(correo, "token_verificacion")
     assert tok
     assert c.get(f"/verificar-correo/{tok}").json()["estado"] == "ok"
-    assert c.get(f"/verificar-correo/{tok}").json()["estado"] == "invalido"
+    assert c.get(f"/verificar-correo/{tok}").json()["estado"] == "ok"
     lg = c.post("/login", json={"correo": correo, "password": "Prueba2026!"}).json()
     assert lg["ok"] is True and lg["usuario"]["correo_verificado"] is True
 
