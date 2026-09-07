@@ -1,7 +1,7 @@
 """Schemas Pydantic v2 para validación y serialización de la API."""
 from datetime import datetime, date
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, Field, EmailStr, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -70,6 +70,12 @@ class NuevaPassword(BaseModel):
 
 class ReenviarVerificacion(BaseModel):
     correo: EmailStr
+
+
+class CodigoCorreo(BaseModel):
+    """Correo + código de 6 dígitos (verificación de cuenta o recuperación)."""
+    correo: EmailStr
+    codigo: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
 class RolResponse(BaseModel):

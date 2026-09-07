@@ -22,7 +22,15 @@ def frontend_url() -> str:
     return os.getenv("FRONTEND_URL", "http://localhost:3000").strip().rstrip("/")
 
 
-def _plantilla(titulo: str, saludo: str, cuerpo: str, boton: str, link: str, pie: str) -> str:
+def _bloque_codigo(codigo: str) -> str:
+    return f"""
+          <p style="margin:0 0 6px;font-size:13px;color:#6b7280;">Tu código:</p>
+          <div style="display:inline-block;padding:14px 26px;border-radius:12px;background:#eff6ff;border:1px dashed {AZUL};
+                      font-size:30px;font-weight:800;letter-spacing:10px;color:{AZUL};font-family:Consolas,Menlo,monospace;">{codigo}</div>
+          <p style="margin:6px 0 0;font-size:12px;color:#9ca3af;">Escríbelo en la aplicación, o usa el botón de abajo.</p>"""
+
+
+def _plantilla(titulo: str, saludo: str, cuerpo: str, boton: str, link: str, pie: str, codigo: str = "") -> str:
     """Plantilla HTML sencilla y compatible con Gmail/Outlook."""
     return f"""\
 <!doctype html><html lang="es"><body style="margin:0;padding:0;background:#EEF0F7;font-family:Inter,Segoe UI,Arial,sans-serif;">
@@ -36,7 +44,8 @@ def _plantilla(titulo: str, saludo: str, cuerpo: str, boton: str, link: str, pie
         <h1 style="margin:0 0 12px;font-size:22px;color:#111827;">{titulo}</h1>
         <p style="margin:0 0 8px;font-size:15px;color:#374151;">{saludo}</p>
         <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.55;">{cuerpo}</p>
-        <table cellpadding="0" cellspacing="0"><tr><td style="border-radius:999px;background:{AZUL};">
+        {_bloque_codigo(codigo) if codigo else ""}
+        <table cellpadding="0" cellspacing="0" style="margin-top:22px;"><tr><td style="border-radius:999px;background:{AZUL};">
           <a href="{link}" style="display:inline-block;padding:14px 28px;color:#fff;text-decoration:none;font-weight:700;font-size:15px;border-radius:999px;">{boton}</a>
         </td></tr></table>
         <p style="margin:24px 0 0;font-size:12px;color:#6B7280;line-height:1.5;">
@@ -73,7 +82,7 @@ async def _enviar(destinatario: str, asunto: str, html: str, texto: str) -> dict
         return {"enviado": False, "error": f"{type(error).__name__}: {error}"}
 
 
-async def enviar_verificacion(destinatario: str, nombre: str, token: str) -> dict:
+async def enviar_verificacion(destinatario: str, nombre: str, token: str, codigo: str = "") -> dict:
     link = f"{frontend_url()}/verificar/{token}"
     html = _plantilla(
         titulo="Confirma tu correo electrónico",
@@ -82,15 +91,17 @@ async def enviar_verificacion(destinatario: str, nombre: str, token: str) -> dic
                 "confirma que este correo te pertenece haciendo clic en el botón."),
         boton="Verificar mi correo",
         link=link,
-        pie="Este enlace expira en 24 horas. Si no creaste una cuenta, ignora este mensaje.",
+        pie="El código y el enlace expiran en 24 horas. Si no creaste una cuenta, ignora este mensaje.",
+        codigo=codigo,
     )
-    texto = (f"Hola {nombre},\n\nConfirma tu correo en {APP} abriendo este enlace:\n{link}\n\n"
+    texto = (f"Hola {nombre},\n\nTu código de verificación en {APP} es: {codigo}\n\n"
+             f"También puedes confirmar tu correo abriendo este enlace:\n{link}\n\n"
              "El enlace expira en 24 horas. Si no creaste una cuenta, ignora este mensaje.")
     r = await _enviar(destinatario, f"Verifica tu correo - {APP}", html, texto)
     return r
 
 
-async def enviar_recuperacion(destinatario: str, nombre: str, token: str) -> dict:
+async def enviar_recuperacion(destinatario: str, nombre: str, token: str, codigo: str = "") -> dict:
     link = f"{frontend_url()}/restablecer/{token}"
     html = _plantilla(
         titulo="Restablece tu contraseña",
@@ -99,9 +110,11 @@ async def enviar_recuperacion(destinatario: str, nombre: str, token: str) -> dic
                 "Haz clic en el botón para elegir una nueva contraseña."),
         boton="Restablecer contraseña",
         link=link,
-        pie="Este enlace expira en 30 minutos. Si no solicitaste este cambio, puedes ignorar este correo; tu contraseña no cambiará.",
+        codigo=codigo,
+        pie="El código y el enlace expiran en 30 minutos. Si no solicitaste este cambio, puedes ignorar este correo; tu contraseña no cambiará.",
     )
-    texto = (f"Hola {nombre},\n\nPara restablecer tu contraseña en {APP} abre este enlace:\n{link}\n\n"
+    texto = (f"Hola {nombre},\n\nTu código para restablecer la contraseña en {APP} es: {codigo}\n\n"
+             f"También puedes abrir este enlace:\n{link}\n\n"
              "El enlace expira en 30 minutos. Si no lo solicitaste, ignora este correo.")
     r = await _enviar(destinatario, f"Recuperación de contraseña - {APP}", html, texto)
     return r

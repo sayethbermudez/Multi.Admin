@@ -159,3 +159,19 @@ frontend/tests_ui_rbac.py    → 36/36 OK  (Playwright: login real por rol, men�
 - Sin SMTP configurado la API funciona en **modo demo** (devuelve el enlace en la respuesta).
 - Pruebas: `test_rbac.py` +4 (registro→bloqueo→verificar→login; reenvío anti-enumeración; alta por admin verificada; recuperación completa). **Total 111/111 ✅**.
 - ⚠️ Envío real con Gmail: la contraseña de aplicación suministrada fue rechazada por Google (`535 BadCredentials`) — ver README/.env.example para generar una nueva.
+
+## 13. Códigos de verificación de 6 dígitos (registro y recuperación)
+
+Además del enlace, cada correo incluye un **código numérico de 6 dígitos** (aleatorio con `secrets`) que se escribe directamente en la aplicación.
+
+| Flujo | Endpoint | Comportamiento |
+|---|---|---|
+| Registro | `POST /verificar-codigo {correo, codigo}` | Activa la cuenta. Estados: `ok` / `expirado` (24 h) / `invalido`. Idempotente. Rate limit 10/5 min. |
+| Reenvío | `POST /reenviar-verificacion` | Genera un código y un enlace nuevos. |
+| Olvidé contraseña | `POST /validar-codigo-recuperacion {correo, codigo}` | Si es correcto y vigente (30 min) devuelve el `token` para `POST /restablecer-password`. Rate limit 10/5 min. |
+
+- Comparación en tiempo constante (`secrets.compare_digest`); el código nunca viaja en respuestas HTTP, solo por correo.
+- Pantallas: `/register` (paso de código tras crear la cuenta), `/verificar-codigo?correo=` (desde el aviso de "cuenta no verificada" en login), `/recuperar` (correo → código → nueva contraseña). Componente `CodigoInput` (6 casillas, acepta pegar).
+- Los enlaces de los correos siguen funcionando (`/verificar/:token`, `/restablecer/:token`).
+- Tests: `test_verificacion_con_codigo_de_6_digitos`, `test_recuperacion_con_codigo_de_6_digitos` → suite 113/113.
+- Prueba real (Playwright + Gmail real a sl99081201125@gmail.com): registro → código incorrecto rechazado → código correcto verifica → login OK → recuperar → código → nueva contraseña → login OK. Capturas: `capturas_diseno/registro_codigo*.png`, `recuperar_codigo.png`, `recuperar_nueva_password.png`, `recuperar_listo.png`.

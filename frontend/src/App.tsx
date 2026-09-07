@@ -6,6 +6,7 @@ import Register from "@/pages/Register";
 import Recuperar from "@/pages/Recuperar";
 import RestablecerPassword from "@/pages/RestablecerPassword";
 import VerificarCorreo from "@/pages/VerificarCorreo";
+import VerificarCodigo from "@/pages/VerificarCodigo";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import Inicio from "@/pages/Dashboard/Inicio";
 import Usuarios from "@/pages/Dashboard/Usuarios";
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="/recuperar" element={<Recuperar />} />
         <Route path="/restablecer/:token" element={<RestablecerPassword />} />
         <Route path="/verificar/:token" element={<VerificarCorreo />} />
+        <Route path="/verificar-codigo" element={<VerificarCodigo />} />
 
         {/* Rutas protegidas del dashboard */}
         <Route

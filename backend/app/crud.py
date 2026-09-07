@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 VERIFICACION_HORAS = 24
 
 
+def generar_codigo() -> str:
+    """Código numérico de 6 dígitos (criptográficamente aleatorio)."""
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
 def crear_usuario(db: Session, datos, verificado: bool = False) -> Usuario:
     """Crea el usuario. Si `verificado` es False se genera un token de
     verificación de correo y la cuenta no podrá iniciar sesión hasta confirmarlo."""
@@ -37,6 +42,7 @@ def crear_usuario(db: Session, datos, verificado: bool = False) -> Usuario:
         id_copropiedad=datos.id_copropiedad,
         correo_verificado=verificado,
         token_verificacion=None if verificado else secrets.token_urlsafe(32),
+        codigo_verificacion=None if verificado else generar_codigo(),
         expira_verificacion=None if verificado else datetime.utcnow() + timedelta(hours=VERIFICACION_HORAS),
     )
     db.add(nuevo)
@@ -144,9 +150,12 @@ def login_usuario(db: Session, correo: str, password: str):
 async def enviar_verificacion(db: Session, usuario: Usuario) -> dict:
     """(Re)genera el token de verificación y envía el correo."""
     usuario.token_verificacion = secrets.token_urlsafe(32)
+    usuario.codigo_verificacion = generar_codigo()
     usuario.expira_verificacion = datetime.utcnow() + timedelta(hours=VERIFICACION_HORAS)
     db.commit()
-    return await correo_svc.enviar_verificacion(usuario.correo, usuario.nombre, usuario.token_verificacion)
+    return await correo_svc.enviar_verificacion(
+        usuario.correo, usuario.nombre, usuario.token_verificacion, usuario.codigo_verificacion
+    )
 
 
 def verificar_correo(db: Session, token: str) -> str:
@@ -163,7 +172,26 @@ def verificar_correo(db: Session, token: str) -> str:
     if usuario.expira_verificacion and usuario.expira_verificacion < datetime.utcnow():
         return "expirado"
     usuario.correo_verificado = True
+    usuario.codigo_verificacion = None
     # El token se conserva (ya no otorga nada nuevo) para que reabrir el enlace siga mostrando 'ok'.
+    db.commit()
+    return "ok"
+
+
+def verificar_codigo_correo(db: Session, correo: str, codigo: str) -> str:
+    """Verifica la cuenta con el código de 6 dígitos. Devuelve 'ok', 'expirado' o 'invalido'."""
+    codigo = (codigo or "").strip()
+    usuario = db.query(Usuario).filter(Usuario.correo == correo.strip()).first()
+    if not usuario:
+        return "invalido"
+    if usuario.correo_verificado:
+        return "ok"
+    if not usuario.codigo_verificacion or not secrets.compare_digest(usuario.codigo_verificacion, codigo):
+        return "invalido"
+    if usuario.expira_verificacion and usuario.expira_verificacion < datetime.utcnow():
+        return "expirado"
+    usuario.correo_verificado = True
+    usuario.codigo_verificacion = None
     db.commit()
     return "ok"
 
@@ -180,10 +208,26 @@ async def enviar_recuperacion(db: Session, correo: str) -> dict:
         return {"enviado": False, "error": None}
 
     token = secrets.token_urlsafe(32)
+    codigo = generar_codigo()
     usuario.token_recuperacion = token
+    usuario.codigo_recuperacion = codigo
     usuario.expira_token = datetime.utcnow() + timedelta(minutes=30)
     db.commit()
-    return await correo_svc.enviar_recuperacion(usuario.correo, usuario.nombre, token)
+    return await correo_svc.enviar_recuperacion(usuario.correo, usuario.nombre, token, codigo)
+
+
+def validar_codigo_recuperacion(db: Session, correo: str, codigo: str) -> str | None:
+    """Si el código de 6 dígitos es correcto y vigente, devuelve el token para
+    restablecer la contraseña (el mismo que viaja en el enlace del correo)."""
+    codigo = (codigo or "").strip()
+    usuario = db.query(Usuario).filter(Usuario.correo == correo.strip()).first()
+    if not usuario or not usuario.codigo_recuperacion or not usuario.token_recuperacion:
+        return None
+    if not secrets.compare_digest(usuario.codigo_recuperacion, codigo):
+        return None
+    if not usuario.expira_token or usuario.expira_token < datetime.utcnow():
+        return None
+    return usuario.token_recuperacion
 
 
 def cambiar_password(db: Session, token: str, nueva_password: str) -> bool:
@@ -196,6 +240,7 @@ def cambiar_password(db: Session, token: str, nueva_password: str) -> bool:
         return False
     usuario.contrasena_hash = hashear_password(nueva_password)
     usuario.token_recuperacion = None
+    usuario.codigo_recuperacion = None
     usuario.expira_token = None
     db.commit()
     return True

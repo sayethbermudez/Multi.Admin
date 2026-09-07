@@ -83,9 +83,14 @@ export default function Login() {
         {noVerificado && (
           <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-2xl px-3 py-2 space-y-1">
             <p>Tu cuenta aún no está verificada.</p>
-            {reenviado ? <p className="text-xs break-all">{reenviado}</p> : (
-              <button type="button" onClick={reenviar} className="text-primary-600 font-semibold hover:underline text-xs">Reenviar correo de verificación</button>
-            )}
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+              <Link to={`/verificar-codigo?correo=${encodeURIComponent(correo)}`} className="text-primary-600 font-semibold hover:underline">
+                Ingresar código
+              </Link>
+              {reenviado ? <span className="break-all">{reenviado}</span> : (
+                <button type="button" onClick={reenviar} className="text-primary-600 font-semibold hover:underline">Reenviar correo</button>
+              )}
+            </div>
           </div>
         )}
         {error && !noVerificado && (

@@ -74,7 +74,7 @@ async def registrar(
 
     respuesta = crud.serializar_usuario(nuevo, db)
     if not creado_por_admin:
-        envio = await correo_svc.enviar_verificacion(nuevo.correo, nuevo.nombre, nuevo.token_verificacion)
+        envio = await correo_svc.enviar_verificacion(nuevo.correo, nuevo.nombre, nuevo.token_verificacion, nuevo.codigo_verificacion)
         respuesta["verificacion"] = {
             "requerida": True,
             "enviado": bool(envio.get("enviado")),
@@ -105,6 +105,19 @@ def verificar_correo(token: str, db: Session = Depends(get_db)):
     return {"ok": estado == "ok", "estado": estado, "mensaje": mensajes[estado]}
 
 
+@router.post("/verificar-codigo")
+def verificar_codigo(request: Request, datos: schemas.CodigoCorreo, db: Session = Depends(get_db)):
+    """Confirma la cuenta con el código de 6 dígitos recibido por correo."""
+    limitar(request, "verificar-codigo", max_intentos=10, ventana_segundos=300)
+    estado = crud.verificar_codigo_correo(db, datos.correo, datos.codigo)
+    mensajes = {
+        "ok": "¡Correo verificado! Ya puedes iniciar sesión.",
+        "expirado": "El código expiró. Solicita uno nuevo.",
+        "invalido": "El código es incorrecto.",
+    }
+    return {"ok": estado == "ok", "estado": estado, "mensaje": mensajes[estado]}
+
+
 @router.post("/reenviar-verificacion")
 async def reenviar_verificacion(
     request: Request,
@@ -113,7 +126,7 @@ async def reenviar_verificacion(
 ):
     """Reenvía el correo de verificación. No revela si el correo existe."""
     limitar(request, "reenviar-verificacion", max_intentos=5, ventana_segundos=300)
-    respuesta = {"mensaje": "Si el correo está registrado y pendiente de verificación, te enviamos un nuevo enlace."}
+    respuesta = {"mensaje": "Si el correo está registrado y pendiente de verificación, te enviamos un nuevo código."}
     usuario = db.query(Usuario).filter(Usuario.correo == datos.correo.strip()).first()
     if usuario and not usuario.correo_verificado:
         await crud.enviar_verificacion(db, usuario)
@@ -176,7 +189,17 @@ async def recuperar_password(
     limitar(request, "recuperar-password", max_intentos=5, ventana_segundos=300)
     await crud.enviar_recuperacion(db, datos.correo)
     # No se revela si el correo existe (anti-enumeración) y nunca se expone el enlace.
-    return {"mensaje": "Si el correo existe, te enviamos un enlace de recuperación."}
+    return {"mensaje": "Si el correo existe, te enviamos un código de recuperación."}
+
+
+@router.post("/validar-codigo-recuperacion")
+def validar_codigo_recuperacion(request: Request, datos: schemas.CodigoCorreo, db: Session = Depends(get_db)):
+    """Valida el código de 6 dígitos y devuelve el token para restablecer la contraseña."""
+    limitar(request, "validar-codigo-recuperacion", max_intentos=10, ventana_segundos=300)
+    token = crud.validar_codigo_recuperacion(db, datos.correo, datos.codigo)
+    if not token:
+        return {"valido": False, "mensaje": "El código es incorrecto o ya expiró."}
+    return {"valido": True, "token": token}
 
 
 @router.get("/validar-token-recuperacion/{token}")

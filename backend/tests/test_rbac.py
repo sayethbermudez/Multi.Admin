@@ -436,3 +436,52 @@ def test_recuperacion_password_flujo_completo(sesiones):
     assert c.post("/login", json={"correo": correo, "password": "Nueva2026!"}).json()["ok"] is True
     # El token se consume
     assert c.get(f"/validar-token-recuperacion/{tok}").json()["valido"] is False
+
+
+# ---------------------------------------------------------------------------
+# CÓDIGOS DE 6 DÍGITOS (verificación de cuenta y recuperación)
+# ---------------------------------------------------------------------------
+def test_verificacion_con_codigo_de_6_digitos():
+    correo = f"codigo.{int(time.time())}@x.com"
+    r = c.post("/register", json={"nombre": "Con Código", "correo": correo, "contrasena": "Prueba2026!", "rol_id": 3})
+    assert r.status_code == 200 and "codigo" not in r.json().get("verificacion", {})
+
+    codigo = _token_de(correo, "codigo_verificacion")
+    assert codigo and len(codigo) == 6 and codigo.isdigit()
+
+    # Formato inválido → 422; código incorrecto → invalido
+    assert c.post("/verificar-codigo", json={"correo": correo, "codigo": "12"}).status_code == 422
+    malo = "000000" if codigo != "000000" else "111111"
+    assert c.post("/verificar-codigo", json={"correo": correo, "codigo": malo}).json()["estado"] == "invalido"
+    lg = c.post("/login", json={"correo": correo, "password": "Prueba2026!"}).json()
+    assert lg["ok"] is False
+
+    # Código correcto → verificado; repetir sigue siendo ok; login funciona
+    assert c.post("/verificar-codigo", json={"correo": correo, "codigo": codigo}).json()["estado"] == "ok"
+    assert c.post("/verificar-codigo", json={"correo": correo, "codigo": codigo}).json()["estado"] == "ok"
+    lg = c.post("/login", json={"correo": correo, "password": "Prueba2026!"}).json()
+    assert lg["ok"] is True and lg["usuario"]["correo_verificado"] is True
+
+
+def test_recuperacion_con_codigo_de_6_digitos(sesiones):
+    correo = f"olvido.codigo.{int(time.time())}@x.com"
+    admin = sesiones["admin"][0]
+    r = c.post("/register", headers=admin, json={"nombre": "Olvido", "correo": correo, "contrasena": "Prueba2026!", "rol_id": 3})
+    assert r.status_code == 200
+
+    r = c.post("/recuperar-password", json={"correo": correo})
+    assert r.status_code == 200 and "token" not in r.json() and "codigo" not in r.json()
+    codigo = _token_de(correo, "codigo_recuperacion")
+    token = _token_de(correo, "token_recuperacion")
+    assert codigo and len(codigo) == 6 and token
+
+    malo = "000000" if codigo != "000000" else "111111"
+    assert c.post("/validar-codigo-recuperacion", json={"correo": correo, "codigo": malo}).json()["valido"] is False
+    v = c.post("/validar-codigo-recuperacion", json={"correo": correo, "codigo": codigo}).json()
+    assert v["valido"] is True and v["token"] == token
+
+    ok = c.post("/restablecer-password", json={"token": v["token"], "nueva_password": "NuevaClave2026!"}).json()
+    assert ok["ok"] is True
+    # El código queda consumido
+    assert c.post("/validar-codigo-recuperacion", json={"correo": correo, "codigo": codigo}).json()["valido"] is False
+    assert c.post("/login", json={"correo": correo, "password": "NuevaClave2026!"}).json()["ok"] is True

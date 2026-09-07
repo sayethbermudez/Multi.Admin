@@ -28,6 +28,8 @@ with engine.begin() as _conn:
         "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS correo_verificado BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS token_verificacion VARCHAR(255)",
         "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS expira_verificacion TIMESTAMP",
+        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_verificacion VARCHAR(6)",
+        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_recuperacion VARCHAR(6)",
         # Las cuentas creadas antes de esta función se consideran verificadas.
         "UPDATE usuarios SET correo_verificado = TRUE WHERE token_verificacion IS NULL AND correo_verificado = FALSE",
     ):
