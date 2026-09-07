@@ -86,4 +86,8 @@ def home():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    from app.email_config import mail_configurado, EMAIL_USER, MAIL_SERVER
+    return {
+        "status": "ok",
+        "correo": {"configurado": mail_configurado(), "remitente": EMAIL_USER or None, "servidor": MAIL_SERVER or None},
+    }

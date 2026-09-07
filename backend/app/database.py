@@ -5,7 +5,12 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
 # Carga de variables de entorno (.env en local; en Docker llegan del compose).
-load_dotenv()
+from pathlib import Path as _Path
+_BACKEND_DIR = _Path(__file__).resolve().parents[1]
+for _ruta in (_BACKEND_DIR / ".env", _BACKEND_DIR.parent / ".env"):
+    if _ruta.is_file():
+        load_dotenv(_ruta, override=False)
+load_dotenv(override=False)
 
 DB_URL = os.getenv("DATABASE_URL")
 
