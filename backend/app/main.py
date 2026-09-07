@@ -67,6 +67,10 @@ for r in [
 @app.on_event("startup")
 def arrancar():
     """Siembra datos iniciales si la base está vacía (idempotente)."""
+    from app.email_config import resumen_smtp, mail_configurado
+    (logging.getLogger("app.correo").info if mail_configurado() else logging.getLogger("app.correo").error)(
+        "[correo] %s", resumen_smtp()
+    )
     db: Session = SessionLocal()
     try:
         sincronizar_permisos(db)

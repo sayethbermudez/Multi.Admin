@@ -81,7 +81,13 @@ async def registrar(
             "mensaje": (
                 "Te enviamos un correo para verificar tu cuenta. Revisa tu bandeja de entrada (y el spam)."
                 if envio.get("enviado")
-                else "No se pudo enviar el correo de verificación. Usa la opción 'Reenviar verificación'."
+                else (
+                    "El servidor no tiene correo configurado (EMAIL_USER / EMAIL_PASSWORD en backend/.env). "
+                    "Configúralo y usa 'Reenviar verificación' desde el inicio de sesión."
+                    if envio.get("error") == "SMTP no configurado"
+                    else "No se pudo enviar el correo de verificación (revisa el log del servidor). "
+                         "Usa la opción 'Reenviar verificación' desde el inicio de sesión."
+                )
             ),
         }
     return respuesta

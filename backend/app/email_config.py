@@ -25,6 +25,14 @@ conf = ConnectionConfig(
 )
 
 
+def resumen_smtp() -> str:
+    """Texto para el log de arranque: indica si el envío real de correos está activo."""
+    if mail_configurado():
+        return f"SMTP configurado: {EMAIL_USER} via {MAIL_SERVER}:{MAIL_PORT}"
+    return ("SMTP NO configurado: los correos de verificación/recuperación NO se enviarán. "
+            "Define EMAIL_USER, EMAIL_PASSWORD y MAIL_SERVER en backend/.env")
+
+
 def mail_configurado() -> bool:
     """True si hay credenciales SMTP reales configuradas."""
     return bool(EMAIL_USER and EMAIL_PASSWORD and MAIL_SERVER)
