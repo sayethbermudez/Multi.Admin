@@ -1,7 +1,7 @@
 """Envío de correos transaccionales (verificación de cuenta y recuperación de contraseña).
 
-Usa fastapi-mail con las credenciales SMTP del .env. Si no hay SMTP configurado,
-no falla: devuelve el enlace generado para poder probar el flujo (modo demo).
+Usa fastapi-mail con las credenciales SMTP del .env. Si no hay SMTP configurado
+o el envío falla, se registra el error y se informa (nunca se expone el enlace).
 """
 import asyncio
 import logging
@@ -55,8 +55,8 @@ def _plantilla(titulo: str, saludo: str, cuerpo: str, boton: str, link: str, pie
 
 async def _enviar(destinatario: str, asunto: str, html: str, texto: str) -> dict:
     if not mail_configurado():
-        logger.warning("[correo] SMTP no configurado; no se envió '%s'.", asunto)
-        return {"enviado": False, "sin_smtp": True}
+        logger.error("[correo] SMTP no configurado; no se envió '%s'. Configura EMAIL_USER/EMAIL_PASSWORD.", asunto)
+        return {"enviado": False, "error": "SMTP no configurado"}
     mensaje = MessageSchema(
         subject=asunto,
         recipients=[destinatario],
@@ -87,7 +87,6 @@ async def enviar_verificacion(destinatario: str, nombre: str, token: str) -> dic
     texto = (f"Hola {nombre},\n\nConfirma tu correo en {APP} abriendo este enlace:\n{link}\n\n"
              "El enlace expira en 24 horas. Si no creaste una cuenta, ignora este mensaje.")
     r = await _enviar(destinatario, f"Verifica tu correo - {APP}", html, texto)
-    r["link"] = link
     return r
 
 
@@ -105,5 +104,4 @@ async def enviar_recuperacion(destinatario: str, nombre: str, token: str) -> dic
     texto = (f"Hola {nombre},\n\nPara restablecer tu contraseña en {APP} abre este enlace:\n{link}\n\n"
              "El enlace expira en 30 minutos. Si no lo solicitaste, ignora este correo.")
     r = await _enviar(destinatario, f"Recuperación de contraseña - {APP}", html, texto)
-    r["link"] = link
     return r

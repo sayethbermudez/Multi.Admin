@@ -84,10 +84,6 @@ async def registrar(
                 else "No se pudo enviar el correo de verificación. Usa la opción 'Reenviar verificación'."
             ),
         }
-        # Modo demo (sin SMTP): se devuelve el enlace para poder probar el flujo.
-        if envio.get("sin_smtp"):
-            respuesta["verificacion"]["modo"] = "demo"
-            respuesta["verificacion"]["link"] = envio.get("link")
     return respuesta
 
 
@@ -114,10 +110,7 @@ async def reenviar_verificacion(
     respuesta = {"mensaje": "Si el correo está registrado y pendiente de verificación, te enviamos un nuevo enlace."}
     usuario = db.query(Usuario).filter(Usuario.correo == datos.correo.strip()).first()
     if usuario and not usuario.correo_verificado:
-        envio = await crud.enviar_verificacion(db, usuario)
-        if envio.get("sin_smtp"):
-            respuesta["modo"] = "demo"
-            respuesta["link"] = envio.get("link")
+        await crud.enviar_verificacion(db, usuario)
     return respuesta
 
 
@@ -175,17 +168,9 @@ async def recuperar_password(
     db: Session = Depends(get_db),
 ):
     limitar(request, "recuperar-password", max_intentos=5, ventana_segundos=300)
-    result = await crud.enviar_recuperacion(db, datos.correo)
-
-    # No se revela si el correo existe (anti-enumeración).
-    respuesta = {"mensaje": "Si el correo existe, te enviamos un enlace de recuperación."}
-
-    # Modo demo/desarrollo: sin SMTP configurado, devolvemos el enlace generado
-    # para que el flujo completo se pueda probar (en producción se envía por correo).
-    if result.get("sin_smtp") and result.get("link"):
-        respuesta["modo"] = "demo"
-        respuesta["link"] = result["link"]
-    return respuesta
+    await crud.enviar_recuperacion(db, datos.correo)
+    # No se revela si el correo existe (anti-enumeración) y nunca se expone el enlace.
+    return {"mensaje": "Si el correo existe, te enviamos un enlace de recuperación."}
 
 
 @router.get("/validar-token-recuperacion/{token}")

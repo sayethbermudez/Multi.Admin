@@ -28,7 +28,7 @@ const preguntas = [
   },
   {
     q: "¿La recuperación de contraseña funciona?",
-    a: "Sí. Si el correo existe, se envía un enlace de restablecimiento que expira en 30 minutos. En modo demostración (sin servidor de correo) el enlace se muestra en pantalla para probar el flujo completo.",
+    a: "Sí. Si el correo existe, se envía un enlace de restablecimiento que expira en 30 minutos.",
   },
 ];
 

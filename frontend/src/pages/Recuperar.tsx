@@ -8,8 +8,6 @@ import { api } from "@/lib/api";
 export default function Recuperar() {
   const [correo, setCorreo] = useState("");
   const [mensaje, setMensaje] = useState("");
-  const [linkRel, setLinkRel] = useState<string | null>(null);
-  const [modoDemo, setModoDemo] = useState(false);
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
 
@@ -18,13 +16,11 @@ export default function Recuperar() {
     setError("");
     setCargando(true);
     try {
-      const res = await api.post<{ mensaje: string; modo?: string; link?: string }>(
+      const res = await api.post<{ mensaje: string }>(
         "/recuperar-password",
         { correo },
       );
       setMensaje(res.mensaje);
-      setLinkRel(res.link ?? null);
-      setModoDemo(res.modo === "demo");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -44,21 +40,6 @@ export default function Recuperar() {
           <p className="text-sm text-gray-600">{mensaje}</p>
           <p className="text-xs text-gray-400 mt-2">Revisa tu bandeja de entrada (y el spam).</p>
 
-          {modoDemo && linkRel && (
-            <div className="mt-4 p-4 rounded-xl bg-blue-50 border border-blue-200 text-left">
-              <p className="text-xs font-semibold text-blue-700 mb-1">🔧 Modo demo (sin SMTP configurado)</p>
-              <p className="text-xs text-blue-600 mb-2">
-                Para probar el flujo, abre este enlace de restablecimiento:
-              </p>
-              <button
-                type="button"
-                onClick={() => linkRel && window.open(linkRel, "_blank")}
-                className="w-full text-sm break-all text-left text-primary-600 font-medium underline hover:text-primary-500"
-              >
-                {linkRel}
-              </button>
-            </div>
-          )}
         </div>
       ) : (
         <form onSubmit={enviar} className="space-y-4">

@@ -27,8 +27,8 @@ export default function VerificarCorreo() {
     e.preventDefault();
     setEnviando(true);
     try {
-      const r = await api.post<{ mensaje: string; link?: string }>("/reenviar-verificacion", { correo });
-      setReenviado(r.link ? `${r.mensaje} (modo demo: ${r.link})` : r.mensaje);
+      const r = await api.post<{ mensaje: string }>("/reenviar-verificacion", { correo });
+      setReenviado(r.mensaje);
     } catch (err) {
       setReenviado((err as Error).message);
     } finally {

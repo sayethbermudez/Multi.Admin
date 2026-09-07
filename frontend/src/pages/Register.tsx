@@ -13,7 +13,7 @@ export default function Register() {
   const [contrasena, setContrasena] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [error, setError] = useState("");
-  const [exito, setExito] = useState<{ mensaje: string; link?: string } | null>(null);
+  const [exito, setExito] = useState<{ mensaje: string } | null>(null);
   const [cargando, setCargando] = useState(false);
 
   const enviar = async (e: FormEvent) => {
@@ -29,7 +29,7 @@ export default function Register() {
     }
     setCargando(true);
     try {
-      const r = await api.post<Usuario & { verificacion?: { mensaje: string; link?: string } }>("/register", {
+      const r = await api.post<Usuario & { verificacion?: { mensaje: string } }>("/register", {
         nombre,
         telefono,
         correo,
@@ -37,7 +37,7 @@ export default function Register() {
         rol_id: 3, // residente por defecto
       });
       if (r.verificacion) {
-        setExito({ mensaje: r.verificacion.mensaje, link: r.verificacion.link });
+        setExito({ mensaje: r.verificacion.mensaje });
       } else {
         setExito({ mensaje: "Redirigiendo al inicio de sesión..." });
         setTimeout(() => navigate("/login"), 1500);
@@ -70,12 +70,6 @@ export default function Register() {
           <p className="text-lg font-semibold text-gray-800">¡Cuenta creada!</p>
           <p className="text-sm text-gray-500 mt-2">{exito.mensaje}</p>
           <p className="text-xs text-gray-400 mt-1">Enviado a <span className="font-medium text-gray-600">{correo}</span></p>
-          {exito.link && (
-            <div className="mt-4 p-4 rounded-2xl bg-blue-50 border border-blue-200 text-left">
-              <p className="text-xs font-semibold text-blue-700 mb-1">🔧 Modo demo (sin SMTP configurado)</p>
-              <a href={exito.link} className="text-sm break-all text-primary-600 font-medium underline">{exito.link}</a>
-            </div>
-          )}
           <Link to="/login" className="mt-5 inline-block text-primary-600 font-medium hover:underline">Ir a iniciar sesión</Link>
         </div>
       ) : (
