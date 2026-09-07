@@ -318,3 +318,32 @@ def test_notificaciones_filtradas_por_permisos(sesiones):
     assert not tipos("residente") & {"mora", "proximo"}       # sin finanzas
     assert not tipos("seguridad") & {"mora", "proximo"}
     assert not tipos("tesoreria") & {"evento", "mantenimiento"}
+
+
+# ---------------------------------------------------------------------------
+# 7. Eventos: solo fechas posteriores al día actual
+# ---------------------------------------------------------------------------
+def test_eventos_solo_fechas_futuras(sesiones):
+    from datetime import date, timedelta
+    hdr = h(sesiones, "admin")
+    hoy = date.today()
+    base = {"titulo": "Asamblea", "descripcion": "Prueba", "lugar": "Salón"}
+
+    # hoy y ayer → 400
+    for f in (hoy, hoy - timedelta(days=1)):
+        r = c.post("/eventos", headers=hdr, json={**base, "fecha": f.isoformat()})
+        assert r.status_code == 400, r.text
+        assert "posterior" in r.json()["detail"]
+
+    # mañana → 201
+    r = c.post("/eventos", headers=hdr, json={**base, "fecha": (hoy + timedelta(days=1)).isoformat()})
+    assert r.status_code == 201, r.text
+    eid = r.json()["id"]
+
+    # editar moviéndolo al pasado → 400; editar solo el título (misma fecha) → 200
+    r = c.put(f"/eventos/{eid}", headers=hdr, json={**base, "fecha": hoy.isoformat()})
+    assert r.status_code == 400
+    r = c.put(f"/eventos/{eid}", headers=hdr, json={**base, "titulo": "Asamblea 2", "fecha": (hoy + timedelta(days=1)).isoformat()})
+    assert r.status_code == 200 and r.json()["titulo"] == "Asamblea 2"
+
+    c.delete(f"/eventos/{eid}", headers=hdr)

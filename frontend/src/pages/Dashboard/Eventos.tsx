@@ -27,9 +27,17 @@ export default function Eventos() {
   const eventosDelDia = eventos?.filter((ev) => ev.fecha?.slice(0, 10) === diaSel) ?? [];
   const diaEtiqueta = diaSel ? fecha(diaSel) : "";
 
+  // Fecha mínima permitida: mañana (los eventos deben ser posteriores al día actual).
+  const manana = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+  const fechaInvalida = (f: string) => !!f && f < manana;
+
   const crear = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
+    if (fechaInvalida(form.fecha)) { setError("La fecha del evento debe ser posterior al día de hoy."); return; }
     try {
       await api.post("/eventos", form);
       setAbierto(false);
@@ -49,6 +57,7 @@ export default function Eventos() {
     e.preventDefault();
     if (!editando) return;
     setError("");
+    if (form.fecha !== editando.fecha && fechaInvalida(form.fecha)) { setError("La fecha del evento debe ser posterior al día de hoy."); return; }
     try {
       await api.put(`/eventos/${editando.id}`, form);
       setEditando(null);
@@ -218,7 +227,8 @@ export default function Eventos() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Fecha</label>
-              <input type="date" className="input" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} required />
+              <input type="date" className="input" min={manana} value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} required />
+              <p className="text-xs text-gray-400 mt-1">Solo se permiten fechas posteriores a hoy.</p>
             </div>
             <div>
               <label className="label">Lugar</label>
@@ -244,7 +254,8 @@ export default function Eventos() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="label">Fecha</label>
-              <input type="date" className="input" value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} required />
+              <input type="date" className="input" min={manana} value={form.fecha} onChange={(e) => setForm({ ...form, fecha: e.target.value })} required />
+              <p className="text-xs text-gray-400 mt-1">Solo se permiten fechas posteriores a hoy.</p>
             </div>
             <div>
               <label className="label">Lugar</label>
