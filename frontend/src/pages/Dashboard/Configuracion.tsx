@@ -65,7 +65,7 @@ export default function Configuracion() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Configuración del sistema</h2>
+          <h2 className="text-lg font-bold text-gray-900">Configuración del sistema</h2>
           <p className="text-sm text-gray-500">Parámetros globales de la copropiedad.</p>
         </div>
         {puede("sistema.respaldar") && (
@@ -78,7 +78,7 @@ export default function Configuracion() {
 
       {msg && <div className="text-sm text-primary-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">{msg}</div>}
 
-      <Card className="p-5">
+      <Card>
         {cargando && <p className="text-sm text-gray-400 py-6 text-center">Cargando...</p>}
         <form onSubmit={guardar} className="space-y-4">
           {(data ?? []).map((c) => (

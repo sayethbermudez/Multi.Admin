@@ -53,7 +53,7 @@ export default function Notificaciones() {
           setAbierto((v) => !v);
           if (!abierto) cargar();
         }}
-        className="p-2 relative rounded-lg text-gray-600 hover:bg-gray-100"
+        className="p-2 relative rounded-full text-primary-500 hover:bg-primary-50"
         aria-label="Notificaciones"
       >
         <Bell className="w-5 h-5" />
@@ -65,7 +65,7 @@ export default function Notificaciones() {
       </button>
 
       {abierto && (
-        <div className="absolute right-0 mt-2 w-[330px] max-h-[440px] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 z-50">
+        <div className="absolute right-0 mt-2 w-[330px] max-h-[440px] overflow-y-auto bg-white rounded-3xl shadow-2xl border border-gray-100 z-50">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <div>
               <p className="text-sm font-semibold text-gray-800">Notificaciones</p>

@@ -75,10 +75,10 @@ export default function Propiedades() {
   };
 
   return (
-    <Card className="p-5">
+    <Card>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div>
-          <h2 className="text-lg font-semibold">Propiedades</h2>
+          <h2 className="text-lg font-bold text-gray-900">Propiedades</h2>
           <p className="text-sm text-gray-500">{propiedades?.length ?? 0} unidades</p>
         </div>
         <div className="flex items-center gap-2">
@@ -97,7 +97,7 @@ export default function Propiedades() {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-gray-400 border-b border-gray-100">
+            <tr className="text-left">
               <th className="py-2 font-medium">Apartamento</th>
               <th className="py-2 font-medium">Bloque/Torre</th>
               <th className="py-2 font-medium">Área</th>
@@ -108,7 +108,7 @@ export default function Propiedades() {
           </thead>
           <tbody>
             {propiedades?.map((p) => (
-              <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
+              <tr key={p.id} className="">
                 <td className="py-2.5 font-medium text-gray-700">{p.apartamento}</td>
                 <td className="py-2.5 text-gray-500">{p.bloque}/{p.torre}</td>
                 <td className="py-2.5 text-gray-500">{p.area ?? "—"} m²</td>
@@ -117,11 +117,11 @@ export default function Propiedades() {
                 <td className="py-2.5">
                   <div className="flex gap-1">
                     {puede("propiedades.editar") && (<button onClick={() => abrirEdicion(p)} title="Editar"
-                      className="p-1.5 rounded-lg btn btn-ghost text-primary-600 hover:bg-blue-50">
+                      className="p-1.5 rounded-full btn btn-ghost text-primary-600 hover:bg-blue-50">
                       <Pencil className="w-4 h-4" />
                     </button>)}
                     {puede("propiedades.eliminar") && (<button onClick={() => setEliminando(p)} title="Eliminar"
-                      className="p-1.5 rounded-lg btn btn-ghost text-danger hover:bg-red-50">
+                      className="p-1.5 rounded-full btn btn-ghost text-danger hover:bg-red-50">
                       <Trash2 className="w-4 h-4" />
                     </button>)}
                   </div>

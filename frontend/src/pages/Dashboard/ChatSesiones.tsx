@@ -86,7 +86,7 @@ export default function ChatSesiones() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Historial del asistente</h2>
+          <h2 className="text-lg font-bold text-gray-900">Historial del asistente</h2>
           <p className="text-sm text-gray-500">Conversaciones guardadas del chatbot con los datos del conjunto.</p>
         </div>
         <Button variante="outline" tamano="sm" onClick={cargarSesiones}>

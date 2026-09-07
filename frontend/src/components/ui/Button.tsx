@@ -13,7 +13,7 @@ interface ButtonProps extends Omit<HTMLMotionProps<"button">, "children"> {
 
 const estilos: Record<Variante, string> = {
   primary: "bg-primary-500 text-white hover:bg-primary-600 shadow-sm",
-  outline: "border border-gray-300 text-gray-700 bg-white hover:bg-gray-50",
+  outline: "border border-gray-200 text-gray-700 bg-white hover:bg-gray-50",
   ghost: "text-gray-600 hover:bg-gray-100",
   danger: "bg-danger text-white hover:bg-red-600",
   warning: "bg-warning text-white hover:bg-amber-600",

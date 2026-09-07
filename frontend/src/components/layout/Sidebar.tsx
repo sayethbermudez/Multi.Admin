@@ -36,7 +36,7 @@ const items: ItemMenu[] = [
   { label: "Eventos", path: "/dashboard/eventos", icon: CalendarDays, modulo: "eventos" as const },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { usuario, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -64,57 +64,57 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-64 bg-dark-100 text-white flex flex-col h-screen sticky top-0 hidden lg:flex">
+    <aside className="w-[250px] bg-dark-100 text-white flex flex-col min-h-screen lg:min-h-full lg:sticky lg:top-0 lg:h-screen lg:max-h-screen">
       {/* Logo */}
-      <div className="px-6 py-6 flex items-center gap-2 border-b border-white/10">
-        <div className="w-9 h-9 rounded-lg bg-primary-500 flex items-center justify-center">
-          <MessagesSquare className="w-5 h-5 text-white" />
+      <div className="px-6 pt-7 pb-5 flex items-center gap-3">
+        <div className="w-11 h-11 rounded-2xl bg-white flex items-center justify-center overflow-hidden shrink-0">
+          <img src="/assets/logo.png" alt="Multi-Admin" className="w-9 h-9 object-contain" />
         </div>
-        <div>
-          <h1 className="text-lg font-bold leading-tight">Multi-Admin</h1>
-          <p className="text-[10px] text-gray-400">Gestión de copropiedades</p>
+        <div className="min-w-0">
+          <h1 className="text-lg font-extrabold tracking-tight leading-tight">Multi-Admin</h1>
+          <p className="text-[11px] text-gray-400 truncate">Gestión de copropiedades</p>
         </div>
       </div>
 
       {/* Navegación */}
-      <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
-        <p className="text-[11px] uppercase tracking-wider text-gray-500 px-4 mb-2">Menú</p>
+      <nav className="flex-1 px-4 py-2 space-y-1.5 overflow-y-auto">
         {itemsVisibles.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             end={item.end}
+            onClick={onNavigate}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${
+              `flex items-center gap-3 px-5 py-3 rounded-full transition-all duration-200 text-sm font-medium ${
                 isActive
-                  ? "bg-primary-500/15 text-primary-500"
+                  ? "bg-primary-500 text-white shadow-pill"
                   : "text-gray-400 hover:bg-white/10 hover:text-white"
               }`
             }
           >
-            <item.icon className="w-5 h-5" />
-            <span className="text-sm font-medium">{item.label}</span>
+            <item.icon className="w-5 h-5 shrink-0" />
+            <span>{item.label}</span>
           </NavLink>
         ))}
       </nav>
 
       {/* Usuario + logout */}
-      <div className="p-4 border-t border-white/10">
-        <div className="flex items-center gap-3 px-2 mb-3">
-          <div className="w-9 h-9 rounded-full bg-primary-500 flex items-center justify-center text-sm font-bold">
+      <div className="p-4 pb-6 space-y-3">
+        <div className="flex items-center gap-3 px-3">
+          <div className="w-9 h-9 rounded-full bg-primary-500 flex items-center justify-center text-sm font-bold shrink-0">
             {usuario?.nombre?.charAt(0)?.toUpperCase() || "U"}
           </div>
           <div className="min-w-0">
-            <p className="text-sm font-medium text-white truncate">{usuario?.nombre}</p>
-            <p className="text-xs text-gray-400 truncate">{usuario?.correo}</p>
+            <p className="text-sm font-semibold text-white truncate">{usuario?.nombre}</p>
+            <p className="text-[11px] text-gray-400 truncate capitalize">{usuario?.nombre_rol?.replace("_", " ")}</p>
           </div>
         </div>
         <button
           onClick={cerrar}
-          className="flex items-center gap-3 px-4 py-2.5 w-full rounded-lg text-gray-400 hover:bg-white/10 hover:text-white transition-all duration-200"
+          className="flex items-center justify-center gap-2 px-5 py-3 w-full rounded-full bg-primary-500 hover:bg-primary-600 text-white text-sm font-bold tracking-wide shadow-pill transition-all duration-200"
         >
           <LogOut className="w-5 h-5" />
-          <span className="text-sm font-medium">Cerrar sesión</span>
+          <span>CERRAR SESIÓN</span>
         </button>
       </div>
     </aside>

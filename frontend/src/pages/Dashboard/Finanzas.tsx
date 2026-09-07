@@ -99,17 +99,17 @@ export default function Finanzas() {
           { t: "Saldo", v: moneda(resumen?.saldo), c: "text-primary-600" },
           { t: "Pendiente", v: moneda(resumen?.pendiente), c: "text-warning" },
         ].map((s) => (
-          <Card key={s.t} className="p-5">
+          <Card key={s.t}>
             <p className="text-sm text-gray-500">{s.t}</p>
             <p className={`text-2xl font-bold mt-1 ${s.c}`}>{s.v}</p>
           </Card>
         ))}
       </div>
 
-      <Card className="p-5">
+      <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <div>
-            <h2 className="text-lg font-semibold">Movimientos</h2>
+            <h2 className="text-lg font-bold text-gray-900">Movimientos</h2>
             <p className="text-sm text-gray-500">{movs?.length ?? 0} registros</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -136,7 +136,7 @@ export default function Finanzas() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-gray-400 border-b border-gray-100">
+              <tr className="text-left">
                 <th className="py-2 font-medium">Concepto</th>
                 <th className="py-2 font-medium">Propiedad</th>
                 <th className="py-2 font-medium">Vencimiento</th>
@@ -147,7 +147,7 @@ export default function Finanzas() {
             </thead>
             <tbody>
               {movs?.map((m) => (
-                <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                <tr key={m.id} className="">
                   <td className="py-2.5 font-medium text-gray-700">{m.concepto_nombre}</td>
                   <td className="py-2.5 text-gray-500">{m.propiedad_desc ?? "—"}</td>
                   <td className="py-2.5 text-gray-500">{fecha(m.fecha_vencimiento)}</td>
@@ -156,11 +156,11 @@ export default function Finanzas() {
                   <td className="py-2.5">
                     <div className="flex gap-1">
                       {puede("finanzas.editar") && (<button onClick={() => abrirEdicion(m)} title="Editar"
-                        className="p-1.5 rounded-lg btn btn-ghost text-primary-600 hover:bg-blue-50">
+                        className="p-1.5 rounded-full btn btn-ghost text-primary-600 hover:bg-blue-50">
                         <Pencil className="w-4 h-4" />
                       </button>)}
                       {puede("finanzas.eliminar") && (<button onClick={() => setEliminando(m)} title="Eliminar"
-                        className="p-1.5 rounded-lg btn btn-ghost text-danger hover:bg-red-50">
+                        className="p-1.5 rounded-full btn btn-ghost text-danger hover:bg-red-50">
                         <Trash2 className="w-4 h-4" />
                       </button>)}
                     </div>

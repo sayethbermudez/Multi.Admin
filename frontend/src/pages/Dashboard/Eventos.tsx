@@ -73,11 +73,11 @@ export default function Eventos() {
   };
 
   return (
-    <Card className="p-5">
+    <Card>
       {/* Encabezado: título + tabs + botón nuevo */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div>
-          <h2 className="text-lg font-semibold">Eventos</h2>
+          <h2 className="text-lg font-bold text-gray-900">Eventos</h2>
           <p className="text-sm text-gray-500">{eventos?.length ?? 0} programados</p>
         </div>
         <div className="flex items-center gap-3">
@@ -179,11 +179,11 @@ export default function Eventos() {
                 </div>
                 <div className="flex gap-1">
                   {puede("eventos.editar") && (<button onClick={() => abrirEdicion(ev)} title="Editar"
-                    className="p-1.5 rounded-lg btn btn-ghost text-primary-600 hover:bg-blue-50">
+                    className="p-1.5 rounded-full btn btn-ghost text-primary-600 hover:bg-blue-50">
                     <Pencil className="w-4 h-4" />
                   </button>)}
                   {puede("eventos.eliminar") && (<button onClick={() => setEliminando(ev)} title="Eliminar"
-                    className="p-1.5 rounded-lg btn btn-ghost text-danger hover:bg-red-50">
+                    className="p-1.5 rounded-full btn btn-ghost text-danger hover:bg-red-50">
                     <Trash2 className="w-4 h-4" />
                   </button>)}
                 </div>

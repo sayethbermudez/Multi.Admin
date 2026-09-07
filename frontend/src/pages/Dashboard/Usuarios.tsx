@@ -87,10 +87,10 @@ export default function Usuarios() {
 
 
   return (
-    <Card className="p-5">
+    <Card>
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h2 className="text-lg font-semibold">Usuarios del sistema</h2>
+          <h2 className="text-lg font-bold text-gray-900">Usuarios del sistema</h2>
           <p className="text-sm text-gray-500">{usuarios?.length ?? 0} registrados</p>
         </div>
         {puede("usuarios.crear") && (<Button variante="primary" tamano="sm" onClick={() => setAbierto(true)}>
@@ -101,7 +101,7 @@ export default function Usuarios() {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-gray-400 border-b border-gray-100">
+            <tr className="text-left">
               <th className="py-2 font-medium">Nombre</th>
               <th className="py-2 font-medium">Correo</th>
               <th className="py-2 font-medium">Rol</th>
@@ -111,7 +111,7 @@ export default function Usuarios() {
           </thead>
           <tbody>
             {usuarios?.map((u) => (
-              <tr key={u.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
+              <tr key={u.id} className="">
                 <td className="py-2.5">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-blue-50 text-primary-600 flex items-center justify-center text-xs font-bold">
@@ -134,11 +134,11 @@ export default function Usuarios() {
                 <td className="py-2.5">
                   <div className="flex gap-1">
                     {puede("usuarios.editar") && puedeGestionar(u) && (<button onClick={() => abrirEdicion(u)} title="Editar"
-                      className="p-1.5 rounded-lg btn btn-ghost text-primary-600 hover:bg-blue-50">
+                      className="p-1.5 rounded-full btn btn-ghost text-primary-600 hover:bg-blue-50">
                       <Pencil className="w-4 h-4" />
                     </button>)}
                     {puede("usuarios.eliminar") && puedeGestionar(u) && u.id !== yo?.id && (<button onClick={() => setEliminando(u)} title="Eliminar"
-                      className="p-1.5 rounded-lg btn btn-ghost text-danger hover:bg-red-50">
+                      className="p-1.5 rounded-full btn btn-ghost text-danger hover:bg-red-50">
                       <Trash2 className="w-4 h-4" />
                     </button>)}
                   </div>

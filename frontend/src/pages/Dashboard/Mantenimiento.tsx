@@ -94,10 +94,10 @@ export default function Mantenimiento() {
   };
 
   return (
-    <Card className="p-5">
+    <Card>
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h2 className="text-lg font-semibold">Mantenimiento</h2>
+          <h2 className="text-lg font-bold text-gray-900">Mantenimiento</h2>
           <p className="text-sm text-gray-500">{tareas?.length ?? 0} órdenes</p>
         </div>
         <div className="flex items-center gap-2">
@@ -115,7 +115,7 @@ export default function Mantenimiento() {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-gray-400 border-b border-gray-100">
+            <tr className="text-left">
               <th className="py-2 font-medium">Título</th>
               <th className="py-2 font-medium">Prioridad</th>
               <th className="py-2 font-medium">Estado</th>
@@ -125,7 +125,7 @@ export default function Mantenimiento() {
             </thead>
             <tbody>
               {tareas?.map((t) => (
-                <tr key={t.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
+                <tr key={t.id} className="">
                   <td className="py-2.5">
                     <p className="font-medium text-gray-700">{t.titulo}</p>
                     <p className="text-xs text-gray-400">{t.descripcion.slice(0, 50)}...</p>
@@ -141,11 +141,11 @@ export default function Mantenimiento() {
                         </Button>
                       )}
                       {puede("mantenimiento.editar") && (<button onClick={() => abrirEdicion(t)} title="Editar"
-                        className="p-1.5 rounded-lg btn btn-ghost text-primary-600 hover:bg-blue-50">
+                        className="p-1.5 rounded-full btn btn-ghost text-primary-600 hover:bg-blue-50">
                         <Pencil className="w-4 h-4" />
                       </button>)}
                       {puede("mantenimiento.eliminar") && (<button onClick={() => setEliminando(t)} title="Eliminar"
-                        className="p-1.5 rounded-lg btn btn-ghost text-danger hover:bg-red-50">
+                        className="p-1.5 rounded-full btn btn-ghost text-danger hover:bg-red-50">
                         <Trash2 className="w-4 h-4" />
                       </button>)}
                     </div>

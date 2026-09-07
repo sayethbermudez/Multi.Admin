@@ -8,15 +8,20 @@ export default {
         primary: {
           50: "#eff6ff",
           100: "#dbeafe",
-          500: "#3b82f6",
-          600: "#2563eb",
-          700: "#1d4ed8"
+          200: "#bfdbfe",
+          500: "#2563eb",
+          600: "#1d4ed8",
+          700: "#1e40af"
         },
         dark: {
-          100: "#1a2332",
-          200: "#0f172a"
+          100: "#111111",
+          200: "#0a0a0a"
         },
-        surface: "#f0f2f5",
+        surface: "#f6f7fb",
+        lilac: {
+          100: "#E8E0FF",
+          200: "#C5B8F5"
+        },
         gray: {
           50: "#f8fafc",
           100: "#f1f5f9",
@@ -32,14 +37,19 @@ export default {
         danger: "#ef4444"
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "sans-serif"]
+        sans: ["Inter", "Poppins", "system-ui", "-apple-system", "Segoe UI", "sans-serif"]
       },
       boxShadow: {
-        card: "0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
-        "card-hover": "0 4px 12px rgba(0,0,0,0.05)"
+        card: "0 2px 12px rgba(17,24,39,0.05)",
+        "card-hover": "0 10px 30px rgba(37,99,235,0.10)",
+        shell: "0 30px 80px rgba(76,29,149,0.18)",
+        pill: "0 6px 18px rgba(37,99,235,0.30)"
       },
       borderRadius: {
-        DEFAULT: "12px"
+        DEFAULT: "14px",
+        "2xl": "20px",
+        "3xl": "28px",
+        "4xl": "32px"
       }
     }
   },

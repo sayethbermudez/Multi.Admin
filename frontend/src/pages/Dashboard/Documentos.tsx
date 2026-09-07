@@ -127,10 +127,10 @@ export default function Documentos() {
   };
 
   return (
-    <Card className="p-5">
+    <Card>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div>
-          <h2 className="text-lg font-semibold">Documentos</h2>
+          <h2 className="text-lg font-bold text-gray-900">Documentos</h2>
           <p className="text-sm text-gray-500">{docs?.length ?? 0} documentos</p>
         </div>
         {puede("documentos.crear") && (<Button variante="primary" tamano="sm" onClick={() => setAbierto(true)}>
@@ -158,15 +158,15 @@ export default function Documentos() {
               </div>
               <div className="flex gap-1">
                 {puede("documentos.descargar") && (<button onClick={() => descargar(d)} title="Descargar"
-                  className="p-1.5 rounded-lg btn btn-ghost text-gray-500 hover:bg-gray-100">
+                  className="p-1.5 rounded-full btn btn-ghost text-gray-500 hover:bg-gray-100">
                   <Download className="w-4 h-4" />
                 </button>)}
                 {puede("documentos.editar") && (<button onClick={() => setEditando(d)} title="Editar"
-                  className="p-1.5 rounded-lg btn btn-ghost text-primary-600 hover:bg-blue-50">
+                  className="p-1.5 rounded-full btn btn-ghost text-primary-600 hover:bg-blue-50">
                   <Pencil className="w-4 h-4" />
                 </button>)}
                 {puede("documentos.eliminar") && (<button onClick={() => setEliminando(d)} title="Eliminar"
-                  className="p-1.5 rounded-lg btn btn-ghost text-danger hover:bg-red-50">
+                  className="p-1.5 rounded-full btn btn-ghost text-danger hover:bg-red-50">
                   <Trash2 className="w-4 h-4" />
                 </button>)}
               </div>

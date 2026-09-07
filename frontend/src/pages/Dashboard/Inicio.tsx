@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import {
   Users,
   Building2,
@@ -7,10 +6,13 @@ import {
   FileText,
   TrendingUp,
   TrendingDown,
-  Home,
   CalendarDays,
 } from "lucide-react";
 import StatCard from "@/components/ui/StatCard";
+import AreaChart from "@/components/dashboard/AreaChart";
+import DonutChart from "@/components/dashboard/DonutChart";
+import MiniCalendario from "@/components/dashboard/MiniCalendario";
+import BarrasProgreso from "@/components/dashboard/BarrasProgreso";
 import Badge, { estadoColor } from "@/components/ui/Badge";
 import { useFetch } from "@/hooks/useFetch";
 import { moneda, fecha } from "@/lib/format";
@@ -41,24 +43,65 @@ export default function Inicio() {
   const ve = (m: string) => tienePermiso(usuario, `${m}.ver`);
 
   const ultimos = movs?.slice(0, 6) ?? [];
-  const maxSerie = Math.max(...(serie?.map((s) => s.valor) ?? [1]));
+
+  // Crecimiento del último mes respecto al anterior (para la etiqueta del gráfico).
+  const crecimiento = (() => {
+    if (!serie || serie.length < 2) return null;
+    const a = serie[serie.length - 2].valor, b = serie[serie.length - 1].valor;
+    if (!a) return null;
+    return ((b - a) / a) * 100;
+  })();
+
+  // Distribución de movimientos por estado (donut).
+  const porEstado = (movs ?? []).reduce<Record<string, number>>((acc, m) => {
+    acc[m.estado] = (acc[m.estado] ?? 0) + 1;
+    return acc;
+  }, {});
+  const totalMovs = movs?.length ?? 0;
+  const segmentos = [
+    { label: "Pagados", valor: porEstado.pagado ?? 0, color: "#2563EB" },
+    { label: "Pendientes", valor: porEstado.pendiente ?? 0, color: "#111111" },
+    { label: "Vencidos", valor: porEstado.vencido ?? 0, color: "#9CA3AF" },
+  ];
+
+  // Composición de ingresos por concepto (barras).
+  const porConcepto = (movs ?? [])
+    .filter((m) => m.estado === "pagado")
+    .reduce<Record<string, number>>((acc, m) => {
+      acc[m.concepto_nombre] = (acc[m.concepto_nombre] ?? 0) + Number(m.monto);
+      return acc;
+    }, {});
+  const totalConcepto = Object.values(porConcepto).reduce((a, b) => a + b, 0) || 1;
+  const barras = Object.entries(porConcepto)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([label, v], i) => ({
+      label,
+      porcentaje: Math.round((v / totalConcepto) * 100),
+      color: i === 0 ? "gradient" : i === 1 ? "#9CA3AF" : "#4B5563",
+    }));
 
   // Vista para roles sin acceso a reportes/finanzas (residente, seguridad...).
   if (!puedeVerReportes) {
     return (
       <div className="space-y-6">
-        <div className="card p-8 text-center">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center mb-4">
-            <Home className="w-7 h-7 text-primary-500" />
+        <div className="rounded-3xl bg-primary-500 text-white p-8 sm:p-10 shadow-pill relative overflow-hidden">
+          <div className="absolute -right-10 -top-10 w-56 h-56 rounded-full bg-white/10" />
+          <div className="absolute right-24 -bottom-16 w-40 h-40 rounded-full bg-white/10" />
+          <div className="relative flex items-center gap-5">
+            <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center shrink-0 overflow-hidden">
+              <img src="/assets/logo.png" alt="" className="w-12 h-12 object-contain" />
+            </div>
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                ¡Bienvenido, {usuario?.nombre?.split(" ")[0] ?? "vecino"}!
+              </h2>
+              <p className="text-white/85 mt-1 text-sm sm:text-base">
+                Tu rol <span className="inline-flex px-2.5 py-0.5 rounded-full bg-white/20 text-white text-xs font-semibold capitalize">{usuario?.nombre_rol?.replace("_", " ")}</span> tiene acceso
+                a los módulos del menú lateral. Los datos financieros solo son visibles para roles autorizados.
+              </p>
+            </div>
           </div>
-          <h2 className="text-2xl font-bold text-dark-100">
-            ¡Bienvenido, {usuario?.nombre?.split(" ")[0] ?? "vecino"}!
-          </h2>
-          <p className="text-gray-500 mt-2">
-            Tu rol <Badge color="info">{usuario?.nombre_rol}</Badge> tiene acceso
-            a los módulos disponibles en el menú lateral. Los datos financieros
-            del conjunto solo son visibles para roles autorizados.
-          </p>
         </div>
 
         {/* Indicadores: solo de los módulos que el rol puede ver */}
@@ -80,8 +123,12 @@ export default function Inicio() {
           )}
         </div>
 
-        <div className="card p-5">
-          <h3 className="text-lg font-semibold mb-3">Dónde encontrar cada cosa</h3>
+        <div className="grid lg:grid-cols-2 gap-5">
+        <div className="card">
+          <MiniCalendario />
+        </div>
+        <div className="card">
+          <h3 className="text-lg font-bold text-gray-900 mb-3">Dónde encontrar cada cosa</h3>
           <ul className="text-sm text-gray-500 space-y-2">
             {ve("eventos") && (<li className="flex items-center gap-2">
               <CalendarDays className="w-4 h-4 text-primary-500" /> Eventos y novedades del conjunto en "Eventos".
@@ -97,97 +144,86 @@ export default function Inicio() {
             </li>)}
           </ul>
         </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Tarjetas de estadísticas */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard titulo="Residentes" valor={`${stats?.residentes ?? 0}`} icono={Users} color="primary" indicador="Activos" />
-        <StatCard titulo="Propiedades" valor={`${stats?.propiedades ?? 0}`} icono={Building2} color="success" indicador="Unidades" />
-        <StatCard titulo="Saldo" valor={moneda(stats?.saldo)} icono={Wallet} color="warning" indicador={stats && stats.saldo < 0 ? "En déficit" : "En superávit"} subida={(stats?.saldo ?? 0) >= 0} />
-        <StatCard titulo="Mantenimientos" valor={`${stats?.mantenimientos_pendientes ?? 0}`} icono={Wrench} color="danger" indicador="Pendientes" subida={false} />
+      {/* Métricas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+        <StatCard titulo="Residentes" valor={`${stats?.residentes ?? 0}`} icono={Users} color="primary" indicador={`${stats?.propiedades ?? 0} propiedades registradas`} />
+        <StatCard titulo="Pagos" valor={`${stats?.pagos_pagados ?? 0}`} icono={TrendingUp} color="success" indicador={`${stats?.pagos_pendientes ?? 0} pendientes`} subida={(stats?.pagos_pendientes ?? 0) === 0} />
+        <StatCard titulo="Saldo" valor={moneda(stats?.saldo)} icono={Wallet} destacada indicador={stats && stats.saldo < 0 ? "En déficit" : "En superávit"} subida={(stats?.saldo ?? 0) >= 0} />
       </div>
 
-      {/* Gráfica + resumen financiero */}
-      <div className="grid lg:grid-cols-3 gap-4">
-        {/* Gráfica de ingresos por mes */}
-        <div className="card lg:col-span-2 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Ingresos por mes</h3>
-            <Badge color="info">Últimos meses</Badge>
+      <div className="grid xl:grid-cols-3 gap-5">
+        {/* Columna izquierda: gráfico + calendario */}
+        <div className="xl:col-span-2 space-y-5">
+          <div className="card">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Ingresos por mes</h3>
+                <p className="text-xs text-gray-400">Recaudo mensual del conjunto</p>
+              </div>
+              <Badge color="info">Últimos meses</Badge>
+            </div>
+            <AreaChart
+              datos={serie ?? []}
+              etiqueta={crecimiento !== null ? `${crecimiento >= 0 ? "+" : ""}${crecimiento.toFixed(2)}%` : undefined}
+              cargando={cargando}
+            />
           </div>
-          <div className="flex items-end gap-3 h-52">
-            {serie?.length ? (
-              serie.map((s, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ height: 0 }}
-                  animate={{ height: "auto" }}
-                  transition={{ delay: i * 0.08, duration: 0.5 }}
-                  className="flex-1 flex flex-col items-center gap-2"
-                  style={{ height: "100%", justifyContent: "flex-end" }}
-                >
-                  <span className="text-xs font-semibold text-gray-500">{moneda(s.valor)}</span>
-                  <div
-                    className="w-full rounded-t-md bg-primary-500 hover:bg-primary-600 transition"
-                    style={{ height: `${(s.valor / maxSerie) * 100}%` }}
-                  />
-                  <span className="text-xs text-gray-400">{s.mes}</span>
-                </motion.div>
-              ))
-            ) : (
-              <p className="text-gray-400 text-sm">{cargando ? "Cargando..." : "Sin datos."}</p>
-            )}
+
+          <div className="card">
+            <MiniCalendario />
           </div>
         </div>
 
-        {/* Resumen financiero */}
-        <div className="card p-5">
-          <h3 className="text-lg font-semibold mb-4">Resumen financiero</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-success" />
-                <span className="text-sm text-gray-500">Ingresos</span>
+        {/* Columna derecha: donut + barras */}
+        <div className="space-y-5">
+          <div className="card">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Estado de pagos</h3>
+            <DonutChart segmentos={segmentos} total={totalMovs} etiquetaTotal="Movimientos" />
+          </div>
+
+          <div className="card">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Ingresos por concepto</h3>
+            <BarrasProgreso items={barras} vacio={cargando ? "Cargando..." : "Sin ingresos registrados."} />
+          </div>
+
+          <div className="card">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Resumen financiero</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-emerald-500" /> Ingresos</span>
+                <span className="font-bold text-emerald-600">{moneda(stats?.ingresos)}</span>
               </div>
-              <span className="font-semibold text-success">{moneda(stats?.ingresos)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TrendingDown className="w-4 h-4 text-danger" />
-                <span className="text-sm text-gray-500">Gastos</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500 flex items-center gap-2"><TrendingDown className="w-4 h-4 text-red-500" /> Gastos</span>
+                <span className="font-bold text-red-500">{moneda(stats?.gastos)}</span>
               </div>
-              <span className="font-semibold text-danger">{moneda(stats?.gastos)}</span>
-            </div>
-            <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700">Pagos pendientes</span>
-              <Badge color="warning">{stats?.pagos_pendientes ?? 0} movs.</Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700">Pagos pagados</span>
-              <Badge color="success">{stats?.pagos_pagados ?? 0} movs.</Badge>
-            </div>
-            <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary-500" />
-                <span className="text-sm text-gray-500">Documentos</span>
+              <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
+                <span className="text-sm text-gray-500 flex items-center gap-2"><FileText className="w-4 h-4 text-primary-500" /> Documentos</span>
+                <span className="font-bold text-gray-800">{stats?.documentos ?? 0}</span>
               </div>
-              <span className="font-semibold text-gray-700">{stats?.documentos ?? 0}</span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-500 flex items-center gap-2"><Wrench className="w-4 h-4 text-amber-500" /> Mantenimientos pendientes</span>
+                <span className="font-bold text-gray-800">{stats?.mantenimientos_pendientes ?? 0}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Últimos movimientos */}
-      <div className="card p-5">
-        <h3 className="text-lg font-semibold mb-4">Últimos movimientos</h3>
+      <div className="card">
+        <h3 className="text-lg font-bold text-gray-900 mb-4">Últimos movimientos</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-gray-400 border-b border-gray-100">
+              <tr className="text-left">
                 <th className="py-2 font-medium">Concepto</th>
                 <th className="py-2 font-medium">Propiedad</th>
                 <th className="py-2 font-medium">Vencimiento</th>
@@ -197,12 +233,12 @@ export default function Inicio() {
             </thead>
             <tbody>
               {ultimos.map((m) => (
-                <tr key={m.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
-                  <td className="py-2.5">{m.concepto_nombre}</td>
-                  <td className="py-2.5 text-gray-500">{m.propiedad_desc ?? "—"}</td>
-                  <td className="py-2.5 text-gray-500">{fecha(m.fecha_vencimiento)}</td>
-                  <td className="py-2.5 font-semibold">{moneda(m.monto)}</td>
-                  <td className="py-2.5"><Badge color={estadoColor(m.estado)}>{m.estado}</Badge></td>
+                <tr key={m.id}>
+                  <td className="py-3 font-medium text-gray-800">{m.concepto_nombre}</td>
+                  <td className="py-3 text-gray-500">{m.propiedad_desc ?? "—"}</td>
+                  <td className="py-3 text-gray-500">{fecha(m.fecha_vencimiento)}</td>
+                  <td className="py-3 font-bold text-gray-900">{moneda(m.monto)}</td>
+                  <td className="py-3"><Badge color={estadoColor(m.estado)}>{m.estado}</Badge></td>
                 </tr>
               ))}
               {!ultimos.length && (
